@@ -30,6 +30,8 @@
 
 ## 快速开始
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/basketikun/infinite-canvas)
+
 ```bash
 git clone git@github.com:basketikun/infinite-canvas.git
 cd infinite-canvas
@@ -69,6 +71,7 @@ docker compose -f docker-compose.local.yml up -d --build
 ## 文档
 
 - [功能介绍](docs/features.md)
+- [部署说明](docs/deployment.md)
 - [画布节点操作手册](docs/canvas-node-manual.md)
 - [画布快捷键](docs/canvas-shortcuts.md)
 - [待办事项](docs/todo.md)
