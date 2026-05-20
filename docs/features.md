@@ -152,7 +152,7 @@
 ## 后端能力
 
 - Gin 提供 API 服务。
-- Docker 运行时由 Go 提供统一入口，`/api/*` 直接处理，其它页面请求转到内部 Next.js 服务。
+- Docker 运行时由 Next.js 提供页面入口，`/api/*` 请求代理到内部 Go 服务。
 - GORM 管理数据库连接和自动迁移。
 - 支持 SQLite、MySQL、PostgreSQL。
 - 数据库保存用户、提示词分组、提示词和服务器素材。

@@ -2,16 +2,11 @@ package router
 
 import (
 	"net/http"
-	"net/http/httputil"
-	"net/url"
-	"strings"
 
 	"github.com/basketikun/infinite-canvas/handler"
 	"github.com/basketikun/infinite-canvas/middleware"
 	"github.com/gin-gonic/gin"
 )
-
-const webBaseURL = "http://127.0.0.1:3001"
 
 func New() *gin.Engine {
 	router := gin.Default()
@@ -47,16 +42,7 @@ func New() *gin.Engine {
 		handler.AdminDeleteAsset(c.Writer, c.Request, c.Param("id"))
 	})
 
-	webURL, _ := url.Parse(webBaseURL)
-	webProxy := httputil.NewSingleHostReverseProxy(webURL)
-	router.NoRoute(func(c *gin.Context) {
-		path := c.Request.URL.Path
-		if path == "/api" || strings.HasPrefix(path, "/api/") {
-			middleware.NotFoundJSON(c)
-			return
-		}
-		webProxy.ServeHTTP(c.Writer, c.Request)
-	})
+	router.NoRoute(middleware.NotFoundJSON)
 
 	return router
 }

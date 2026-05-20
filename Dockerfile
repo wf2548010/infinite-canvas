@@ -23,7 +23,7 @@ COPY service ./service
 COPY main.go ./
 RUN go build -o /server .
 
-# 运行镜像：Go 对外监听 3000，Next.js 只在容器内部监听 3001。
+# 运行镜像：Next.js 对外监听 3000，Go 只在容器内部监听 8080。
 FROM oven/bun:1
 
 WORKDIR /app
@@ -35,5 +35,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 RUN mkdir -p /app/data/prompts
 
 EXPOSE 3000
-# 先启动内部 Next.js，再由 Go 统一处理 /api/* 和页面反代。
-CMD ["sh", "-c", "cd /app/web && HOSTNAME=0.0.0.0 PORT=3001 bun run start & PORT=3000 /app/server"]
+# 先启动内部 Go API，再由 Next.js 提供页面并代理 /api/*。
+CMD ["sh", "-c", "PORT=8080 /app/server & cd /app/web && HOSTNAME=0.0.0.0 PORT=3000 bun run start"]
