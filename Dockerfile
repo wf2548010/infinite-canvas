@@ -29,6 +29,7 @@ FROM oven/bun:1.3.13
 
 WORKDIR /app
 COPY VERSION /app/VERSION
+COPY CHANGELOG.md /app/CHANGELOG.md
 COPY --from=api-build /server /app/server
 COPY --from=web-build /app/web /app/web
 ENV PROMPT_DATA_DIR=/app/data/prompts

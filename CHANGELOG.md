@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-+ [修复] Docker 前端构建阶段补充拷贝 `CHANGELOG.md`，避免版本信息读取失败。
++ [修复] Docker 构建和运行阶段补充拷贝 `CHANGELOG.md`，避免版本信息读取失败。
 
 ## v0.0.5 - 2026-05-20
 
