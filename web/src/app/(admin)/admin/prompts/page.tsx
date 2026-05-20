@@ -136,7 +136,7 @@ export default function AdminPromptsPage() {
         ) : null}
       </Modal>
 
-      <Modal title="同步远程提示词源" open={isSyncOpen} width={640} onCancel={() => !isSyncing && setIsSyncOpen(false)} maskClosable={!isSyncing} footer={<Button disabled={isSyncing} onClick={() => setIsSyncOpen(false)}>取消</Button>}>
+      <Modal title="同步远程提示词源" open={isSyncOpen} width={640} onCancel={() => !isSyncing && setIsSyncOpen(false)} mask={{ closable: !isSyncing }} footer={<Button disabled={isSyncing} onClick={() => setIsSyncOpen(false)}>取消</Button>}>
         <Table
           rowKey="category"
           dataSource={categories.filter((item) => item.remote)}

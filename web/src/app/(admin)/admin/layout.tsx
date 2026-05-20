@@ -1,6 +1,6 @@
 "use client";
 
-import { FileTextOutlined, HomeOutlined, LogoutOutlined, PictureOutlined } from "@ant-design/icons";
+import { FileTextOutlined, HomeOutlined, LogoutOutlined, PictureOutlined, SettingOutlined } from "@ant-design/icons";
 import { Button, Flex, Layout, Menu, Typography } from "antd";
 import { LogOut } from "lucide-react";
 import Link from "next/link";
@@ -21,8 +21,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const logout = useUserStore((state) => state.clearSession);
   const colorTheme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
-  const activeKey = pathname.startsWith("/admin/assets") ? "/admin/assets" : pathname.startsWith("/admin/prompts") ? "/admin/prompts" : "";
-  const pageTitle = pathname.startsWith("/admin/assets") ? "素材库管理" : "提示词管理";
+  const activeKey = pathname.startsWith("/admin/settings") ? "/admin/settings" : pathname.startsWith("/admin/assets") ? "/admin/assets" : pathname.startsWith("/admin/prompts") ? "/admin/prompts" : "";
+  const pageTitle = pathname.startsWith("/admin/settings") ? "系统设置" : pathname.startsWith("/admin/assets") ? "素材库管理" : "提示词管理";
   const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || "dev";
 
   useEffect(() => {
@@ -58,6 +58,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             items={[
               { key: "/admin/prompts", icon: <FileTextOutlined />, label: <Link href="/admin/prompts" style={{ color: "inherit" }}>提示词管理</Link> },
               { key: "/admin/assets", icon: <PictureOutlined />, label: <Link href="/admin/assets" style={{ color: "inherit" }}>素材库</Link> },
+              { key: "/admin/settings", icon: <SettingOutlined />, label: <Link href="/admin/settings" style={{ color: "inherit" }}>系统设置</Link> },
             ]}
           />
           <Flex vertical gap={8} style={{ position: "absolute", bottom: 0, insetInline: 0, padding: 12 }}>

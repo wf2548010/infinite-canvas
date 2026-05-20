@@ -81,3 +81,39 @@ export async function saveAdminAsset(token: string, asset: Partial<AdminAsset>) 
 export async function deleteAdminAsset(token: string, id: string) {
   return apiDelete<boolean>(`/api/admin/assets/${encodeURIComponent(id)}`, token);
 }
+
+export type AdminModelChannel = {
+  key: string;
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  models: string[];
+  enabled: boolean;
+  remark: string;
+};
+
+export type AdminPublicSettings = {
+  availableModels: string[];
+  defaultModel: string;
+  defaultImageModel: string;
+  defaultTextModel: string;
+  systemPrompt: string;
+  allowCustomModel: boolean;
+};
+
+export type AdminPrivateSettings = {
+  channels: AdminModelChannel[];
+};
+
+export type AdminSettings = {
+  public: AdminPublicSettings;
+  private: AdminPrivateSettings;
+};
+
+export async function fetchAdminSettings(token: string) {
+  return apiGet<AdminSettings>("/api/admin/settings", undefined, token);
+}
+
+export async function saveAdminSettings(token: string, settings: AdminSettings) {
+  return apiPost<AdminSettings>("/api/admin/settings", settings, token);
+}

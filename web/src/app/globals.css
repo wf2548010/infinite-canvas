@@ -406,6 +406,36 @@
     width: 26px;
   }
 
+  .admin-json-editor .cm-editor {
+    background: var(--card);
+    color: var(--foreground);
+    font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  .admin-json-editor .cm-scroller {
+    font-family: inherit;
+  }
+
+  .admin-json-editor .cm-gutters {
+    background: color-mix(in srgb, var(--card) 92%, var(--foreground));
+    border-right: 1px solid var(--border);
+    color: var(--muted-foreground);
+  }
+
+  .admin-json-editor .cm-activeLine,
+  .admin-json-editor .cm-activeLineGutter {
+    background: color-mix(in srgb, var(--primary) 12%, transparent);
+  }
+
+  .admin-json-editor .cm-cursor {
+    border-left-color: var(--foreground);
+  }
+
+  .admin-json-editor .cm-selectionBackground,
+  .admin-json-editor .cm-focused .cm-selectionBackground {
+    background: color-mix(in srgb, var(--primary) 28%, transparent);
+  }
+
   @keyframes canvas-batch-child-in {
     from {
       opacity: 0;

@@ -19,6 +19,7 @@ func New() *gin.Engine {
 	api.POST("/auth/register", gin.WrapF(handler.Register))
 	api.POST("/auth/login", gin.WrapF(handler.Login))
 	api.GET("/auth/me", middleware.OptionalAuth, gin.WrapF(handler.CurrentUser))
+	api.GET("/settings", gin.WrapF(handler.Settings))
 	api.GET("/prompts", middleware.OptionalAuth, gin.WrapF(handler.Prompts))
 	api.GET("/assets", middleware.OptionalAuth, gin.WrapF(handler.Assets))
 	api.POST("/admin/login", gin.WrapF(handler.AdminLogin))
@@ -29,6 +30,8 @@ func New() *gin.Engine {
 	admin.DELETE("/users/:id", func(c *gin.Context) {
 		handler.AdminDeleteUser(c.Writer, c.Request, c.Param("id"))
 	})
+	admin.GET("/settings", gin.WrapF(handler.AdminSettings))
+	admin.POST("/settings", gin.WrapF(handler.AdminSaveSettings))
 	admin.GET("/prompt-categories", gin.WrapF(handler.AdminPromptCategories))
 	admin.POST("/prompt-categories/sync", gin.WrapF(handler.AdminSyncPromptCategories))
 	admin.GET("/prompts", gin.WrapF(handler.AdminPrompts))

@@ -48,6 +48,7 @@ func DB() (*gorm.DB, error) {
 			&model.User{},
 			&model.Prompt{},
 			&model.Asset{},
+			&model.Setting{},
 		)
 	})
 	return db, dbErr

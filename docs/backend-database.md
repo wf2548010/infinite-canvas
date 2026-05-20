@@ -17,6 +17,7 @@
 - `users`
 - `prompts`
 - `assets`
+- `settings`
 
 后续新增表时，优先保持表数量少，能用字段或 JSON 表达的配置、状态、统计和扩展信息先不拆表。
 
@@ -103,6 +104,37 @@
 
 `public.value` 常放前端展示和可公开读取的配置，例如模型列表、订阅套餐、功能开关等。
 `private.value` 常放渠道密钥、支付配置、奖励规则、后台内部开关等。
+
+当前系统设置接口会按后端结构体序列化和反序列化已知字段；数据库 JSON 中额外存在的旧字段会被忽略。
+
+`public.value` 当前字段：
+
+| 字段                | 类型       | 说明             |
+|-------------------|----------|----------------|
+| `availableModels` | string[] | 系统可用模型列表       |
+| `defaultModel`    | string   | 默认模型           |
+| `defaultImageModel` | string | 默认图片模型         |
+| `defaultTextModel` | string  | 默认文本模型         |
+| `systemPrompt`    | string   | 系统提示词          |
+| `allowCustomModel` | bool    | 是否允许用户自定义模型    |
+
+`private.value` 当前字段：
+
+| 字段         | 类型       | 说明       |
+|------------|----------|----------|
+| `channels` | object[] | 模型渠道配置列表 |
+
+`channels` 每项字段：
+
+| 字段       | 类型       | 说明       |
+|----------|----------|----------|
+| `key`    | string   | 渠道标识     |
+| `name`   | string   | 渠道名称     |
+| `baseUrl` | string  | 渠道接口地址   |
+| `apiKey` | string   | 渠道密钥     |
+| `models` | string[] | 渠道可用模型列表 |
+| `enabled` | bool    | 是否启用     |
+| `remark` | string   | 备注       |
 
 ### dicts
 

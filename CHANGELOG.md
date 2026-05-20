@@ -2,6 +2,8 @@
 
 ## Unreleased
 
++ [新增] 管理后台新增系统设置页面，支持可视化编辑和手动编辑 JSON。
++ [新增] 后端新增 `settings` 表和系统设置接口，支持 public/private 两行 JSON 配置。
 + [修复] Docker 构建和运行阶段补充拷贝 `CHANGELOG.md`，避免版本信息读取失败。
 
 ## v0.0.5 - 2026-05-20
