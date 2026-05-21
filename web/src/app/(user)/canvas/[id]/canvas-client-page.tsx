@@ -14,7 +14,7 @@ import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useUserStore } from "@/stores/use-user-store";
-import { UserStatusActions } from "@/components/user-status-actions";
+import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { cropDataUrl } from "../utils/canvas-image-data";
 import { App, Button, Dropdown, Modal } from "antd";
 import { NODE_DEFAULT_SIZE, getNodeSpec } from "../constants";

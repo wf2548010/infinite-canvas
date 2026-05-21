@@ -5,10 +5,10 @@ import Link from "next/link";
 import { App, Button, Drawer, Form, Input, Modal, Segmented } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
-import { GitHubLink } from "@/components/github-link";
-import { UserStatusActions } from "@/components/user-status-actions";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
-import { VersionReleaseModal } from "@/components/version-release-modal";
+import { GitHubLink } from "@/components/layout/github-link";
+import { UserStatusActions } from "@/components/layout/user-status-actions";
+import { VersionReleaseModal } from "@/components/layout/version-release-modal";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { navigationTools, type NavigationToolSlug } from "@/lib/navigation-tools";
 import { fetchImageModels } from "@/services/api/image";

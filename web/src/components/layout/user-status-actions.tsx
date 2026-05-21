@@ -5,9 +5,9 @@ import { Dropdown } from "antd";
 import { Settings2 } from "lucide-react";
 import type { ItemType } from "antd/es/menu/interface";
 
-import { GitHubLink } from "@/components/github-link";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
-import { VersionReleaseModal } from "@/components/version-release-modal";
+import { GitHubLink } from "@/components/layout/github-link";
+import { VersionReleaseModal } from "@/components/layout/version-release-modal";
 import { cn } from "@/lib/utils";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";

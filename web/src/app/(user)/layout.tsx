@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
-import { AppTopNav } from "@/components/app-top-nav";
+import { AppTopNav } from "@/components/layout/app-top-nav";
 import { type NavigationToolSlug, navigationTools } from "@/lib/navigation-tools";
 import { useConfigStore } from "@/stores/use-config-store";
 

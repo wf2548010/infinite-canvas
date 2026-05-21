@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { AntdRegistry } from "@ant-design/nextjs-registry";
-import { AppProviders } from "@/components/app-providers";
+import { AppProviders } from "@/components/layout/app-providers";
 import "antd/dist/reset.css";
 import "./globals.css";
+import React from "react";
 
 export const metadata: Metadata = {
   title: "无限画布",
