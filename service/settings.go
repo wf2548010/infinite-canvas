@@ -77,6 +77,14 @@ func SelectModelChannel(modelName string) (model.ModelChannel, error) {
 	return channels[0], nil
 }
 
+func BuildModelChannelURL(channel model.ModelChannel, path string) string {
+	baseURL := strings.TrimRight(channel.BaseURL, "/")
+	if !strings.HasSuffix(baseURL, "/v1") {
+		baseURL += "/v1"
+	}
+	return baseURL + path
+}
+
 func modelChannelsForModel(channels []model.ModelChannel, modelName string) []model.ModelChannel {
 	result := []model.ModelChannel{}
 	for _, channel := range channels {

@@ -1,6 +1,6 @@
 import { apiDelete, apiGet, apiPost, compactApiParams } from "@/services/api/request";
 import type { Prompt, PromptListResponse } from "@/services/api/prompts";
-import { buildApiUrl } from "@/lib/ai-config";
+import { buildApiUrl } from "@/stores/use-config-store";
 import axios from "axios";
 
 export type AdminPromptCategory = {

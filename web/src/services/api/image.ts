@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { buildApiUrl, type AiConfig } from "@/lib/ai-config";
+import { buildApiUrl, type AiConfig } from "@/stores/use-config-store";
 import { createId } from "@/lib/id";
 import { dataUrlToFile } from "@/lib/image-utils";
 import { imageToDataUrl } from "@/services/image-storage";
@@ -63,6 +63,19 @@ function withSystemPrompt(config: AiConfig, prompt: string) {
   return systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
 }
 
+function aiApiUrl(config: AiConfig, path: string) {
+  return config.channelMode === "remote" ? `/api/ai${path}` : buildApiUrl(config.baseUrl, path);
+}
+
+function aiHeaders(config: AiConfig, contentType?: string) {
+  return config.channelMode === "remote"
+    ? contentType ? { "Content-Type": contentType } : undefined
+    : {
+        Authorization: `Bearer ${config.apiKey}`,
+        ...(contentType ? { "Content-Type": contentType } : {}),
+      };
+}
+
 function withSystemMessage(config: AiConfig, messages: ChatCompletionMessage[]) {
   const systemPrompt = config.systemPrompt.trim();
   return systemPrompt ? [{ role: "system" as const, content: systemPrompt }, ...messages] : messages;
@@ -72,7 +85,7 @@ export async function requestGeneration(config: AiConfig, prompt: string) {
   const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
   try {
     const response = await axios.post<ImageApiResponse>(
-      buildApiUrl(config.baseUrl, "/images/generations"),
+      aiApiUrl(config, "/images/generations"),
       {
         model: config.model,
         prompt: withSystemPrompt(config, prompt),
@@ -82,10 +95,7 @@ export async function requestGeneration(config: AiConfig, prompt: string) {
         response_format: "b64_json",
       },
       {
-        headers: {
-          Authorization: `Bearer ${config.apiKey}`,
-          "Content-Type": "application/json",
-        },
+        headers: aiHeaders(config, "application/json"),
       },
     );
     return parseImagePayload(response.data);
@@ -111,11 +121,7 @@ export async function requestEdit(config: AiConfig, prompt: string, references: 
   files.forEach((file) => formData.append("image", file));
 
   try {
-    const response = await axios.post<ImageApiResponse>(buildApiUrl(config.baseUrl, "/images/edits"), formData, {
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-    });
+    const response = await axios.post<ImageApiResponse>(aiApiUrl(config, "/images/edits"), formData, { headers: aiHeaders(config) });
     return parseImagePayload(response.data);
   } catch (error) {
     throw new Error(readAxiosError(error, "请求失败"));
@@ -129,7 +135,7 @@ export async function requestImageQuestion(config: AiConfig, messages: ChatCompl
 
   try {
     await axios.post(
-      buildApiUrl(config.baseUrl, "/chat/completions"),
+      aiApiUrl(config, "/chat/completions"),
       {
       model: config.model,
       messages: withSystemMessage(config, messages),
@@ -137,9 +143,8 @@ export async function requestImageQuestion(config: AiConfig, messages: ChatCompl
       },
       {
         headers: {
-          Authorization: `Bearer ${config.apiKey}`,
-          "Content-Type": "application/json",
-        },
+          ...aiHeaders(config, "application/json"),
+        } as Record<string, string>,
         responseType: "text",
         onDownloadProgress: (event) => {
           const responseText = String(event.event?.target?.responseText || "");
@@ -170,6 +175,7 @@ export async function requestImageQuestion(config: AiConfig, messages: ChatCompl
 }
 
 export async function fetchImageModels(config: AiConfig) {
+  if (config.channelMode === "remote") return config.models;
   try {
     const response = await axios.get<{ data?: Array<{ id?: string }>; error?: { message?: string } }>(buildApiUrl(config.baseUrl, "/models"), {
       headers: {

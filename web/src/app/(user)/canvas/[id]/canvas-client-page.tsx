@@ -6,11 +6,10 @@ import { useParams, useRouter } from "next/navigation";
 import { Home, ImageIcon, Images, Keyboard, List, LogOut, Menu, MessageSquare, Plus, Redo2, Settings2, Trash2, Undo2, Upload } from "lucide-react";
 
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
+import { defaultConfig, isAiConfigReady, type AiConfig, useConfigStore, useEffectiveAiConfig } from "@/stores/use-config-store";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { createId } from "@/lib/id";
 import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
-import { useAiConfigStore } from "@/stores/use-ai-config-store";
-import { useConfigDialogStore } from "@/stores/use-config-dialog-store";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -18,7 +17,6 @@ import { useUserStore } from "@/stores/use-user-store";
 import { UserStatusActions } from "@/components/user-status-actions";
 import { cropDataUrl } from "../utils/canvas-image-data";
 import { App, Button, Dropdown, Modal } from "antd";
-import { defaultConfig, type AiConfig } from "@/lib/ai-config";
 import { NODE_DEFAULT_SIZE, getNodeSpec } from "../constants";
 import { ActiveConnectionPath, ConnectionPath } from "../components/canvas-connections";
 import { CanvasConfigNodePanel } from "../components/canvas-config-node-panel";
@@ -232,8 +230,9 @@ function InfiniteCanvasPage() {
     initialSelectedNodes: [],
   });
 
-  const config = useAiConfigStore((state) => state.config);
-  const openConfigDialog = useConfigDialogStore((state) => state.openConfigDialog);
+  const config = useConfigStore((state) => state.config);
+  const effectiveConfig = useEffectiveAiConfig(config);
+  const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
   const addAsset = useAssetStore((state) => state.addAsset);
   const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
   const hydrated = useCanvasStore((state) => state.hydrated);
@@ -479,7 +478,7 @@ function InfiniteCanvasPage() {
   }, [message]);
 
   const createConnectedNode = useCallback((type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Config, pending: PendingConnectionCreate) => {
-    const metadata = type === CanvasNodeType.Config ? { model: config.imageModel || config.model, size: config.size, count: 3 } : undefined;
+    const metadata = type === CanvasNodeType.Config ? { model: effectiveConfig.imageModel || effectiveConfig.model, size: effectiveConfig.size, count: 3 } : undefined;
     const newNode = createCanvasNode(type, pending.position, metadata);
     const connection = normalizeConnection(pending.connection.nodeId, newNode.id, [...nodesRef.current, newNode], pending.connection.handleType);
     if (!connection) {
@@ -493,7 +492,7 @@ function InfiniteCanvasPage() {
     setDialogNodeId(newNode.id);
     setPendingConnectionCreate(null);
     setConnecting(null);
-  }, [config.imageModel, config.model, config.size, message, setConnecting]);
+  }, [effectiveConfig.imageModel, effectiveConfig.model, effectiveConfig.size, message, setConnecting]);
 
   const cancelPendingConnectionCreate = useCallback(() => {
     setPendingConnectionCreate(null);
@@ -591,8 +590,8 @@ function InfiniteCanvasPage() {
     (type: CanvasNodeType, position?: Position) => {
       const targetPosition = position || getCanvasCenter();
       const configMetadata = type === CanvasNodeType.Config ? {
-        model: config.imageModel || config.model,
-        size: config.size,
+        model: effectiveConfig.imageModel || effectiveConfig.model,
+        size: effectiveConfig.size,
         count: 3,
       } : undefined;
       const newNode = createCanvasNode(type, targetPosition, configMetadata);
@@ -602,7 +601,7 @@ function InfiniteCanvasPage() {
       setSelectedConnectionId(null);
       setDialogNodeId(newNode.id);
     },
-    [config.imageModel, config.model, config.size, getCanvasCenter],
+    [effectiveConfig.imageModel, effectiveConfig.model, effectiveConfig.size, getCanvasCenter],
   );
 
   const deleteNodes = useCallback((ids: Set<string>) => {
@@ -1310,8 +1309,8 @@ function InfiniteCanvasPage() {
 
   const generateAngleNode = useCallback(async (node: CanvasNodeData, params: CanvasImageAngleParams) => {
     if (!node.metadata?.content) return;
-    const generationConfig = { ...buildGenerationConfig(config, node, "image"), count: "1" };
-    if (!generationConfig.baseUrl.trim() || !generationConfig.model.trim() || !generationConfig.apiKey.trim()) {
+    const generationConfig = { ...buildGenerationConfig(effectiveConfig, node, "image"), count: "1" };
+    if (!isAiConfigReady(generationConfig, generationConfig.model)) {
       openConfigDialog(true);
       return;
     }
@@ -1344,7 +1343,7 @@ function InfiniteCanvasPage() {
     } finally {
       setRunningNodeId(null);
     }
-  }, [config, openConfigDialog]);
+  }, [effectiveConfig, openConfigDialog]);
 
   const handleFontSizeChange = useCallback((nodeId: string, fontSize: number) => {
     setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, fontSize } } : node)));
@@ -1434,8 +1433,8 @@ function InfiniteCanvasPage() {
   const handleGenerateNode = useCallback(
     async (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => {
       const sourceNode = nodesRef.current.find((node) => node.id === nodeId);
-      const generationConfig = buildGenerationConfig(config, sourceNode, mode);
-      if (!generationConfig.baseUrl.trim() || !generationConfig.model.trim() || !generationConfig.apiKey.trim()) {
+      const generationConfig = buildGenerationConfig(effectiveConfig, sourceNode, mode);
+      if (!isAiConfigReady(generationConfig, generationConfig.model)) {
         openConfigDialog(true);
         return;
       }
@@ -1617,14 +1616,14 @@ function InfiniteCanvasPage() {
         setRunningNodeId(null);
       }
     },
-    [config, openConfigDialog],
+    [effectiveConfig, openConfigDialog],
   );
 
   const handleRetryNode = useCallback(
     async (node: CanvasNodeData) => {
       const sourceNode = findRetrySourceNode(node.id, nodesRef.current, connectionsRef.current) || node;
-      const generationConfig = { ...buildGenerationConfig(config, sourceNode, node.type === CanvasNodeType.Text ? "text" : "image"), count: "1" };
-      if (!generationConfig.baseUrl.trim() || !generationConfig.model.trim() || !generationConfig.apiKey.trim()) {
+      const generationConfig = { ...buildGenerationConfig(effectiveConfig, sourceNode, node.type === CanvasNodeType.Text ? "text" : "image"), count: "1" };
+      if (!isAiConfigReady(generationConfig, generationConfig.model)) {
         openConfigDialog(true);
         return;
       }
@@ -1670,7 +1669,7 @@ function InfiniteCanvasPage() {
         setRunningNodeId(null);
       }
     },
-    [config, message, openConfigDialog],
+    [effectiveConfig, message, openConfigDialog],
   );
 
   const generateImageFromTextNode = useCallback((node: CanvasNodeData) => {
@@ -1687,8 +1686,8 @@ function InfiniteCanvasPage() {
       y: sourceNode.position.y + sourceNode.height / 2,
     }, {
       prompt: "",
-      model: config.imageModel || config.model,
-      size: config.size,
+      model: effectiveConfig.imageModel || effectiveConfig.model,
+      size: effectiveConfig.size,
       count: 3,
     });
     const connection = { id: createId(), fromNodeId: sourceNode.id, toNodeId: configNode.id };
@@ -1701,7 +1700,7 @@ function InfiniteCanvasPage() {
     setSelectedNodeIds(new Set([configNode.id]));
     setSelectedConnectionId(null);
     setDialogNodeId(configNode.id);
-  }, [config.imageModel, config.model, config.size, message]);
+  }, [effectiveConfig.imageModel, effectiveConfig.model, effectiveConfig.size, message]);
 
   const insertAssistantImage = useCallback(async (image: CanvasAssistantImage) => {
     const storedImage = image.storageKey

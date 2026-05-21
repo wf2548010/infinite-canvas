@@ -2,7 +2,7 @@
 
 import { Select } from "antd";
 
-import type { AiConfig } from "@/lib/ai-config";
+import type { AiConfig } from "@/stores/use-config-store";
 
 type ModelPickerProps = {
   config: AiConfig;

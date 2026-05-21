@@ -5,12 +5,12 @@ import { usePathname } from "next/navigation";
 
 import { AppTopNav } from "@/components/app-top-nav";
 import { type NavigationToolSlug, navigationTools } from "@/lib/navigation-tools";
-import { useAiConfigStore } from "@/stores/use-ai-config-store";
+import { useConfigStore } from "@/stores/use-config-store";
 
 export default function UserLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const config = useAiConfigStore((state) => state.config);
-  const updateConfig = useAiConfigStore((state) => state.updateConfig);
+  const config = useConfigStore((state) => state.config);
+  const updateConfig = useConfigStore((state) => state.updateConfig);
   const slug = pathname.split("/").filter(Boolean)[0];
   const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
 

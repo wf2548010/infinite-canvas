@@ -7,15 +7,13 @@ import { motion } from "motion/react";
 
 import { ImageGenerationPending } from "@/components/image-generation-pending";
 import { ModelPicker } from "@/components/model-picker";
-import type { AiConfig } from "@/lib/ai-config";
+import { isAiConfigReady, useConfigStore, useEffectiveAiConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { createId } from "@/lib/id";
 import { cn } from "@/lib/utils";
 import { requestEdit, requestGeneration, requestImageQuestion, type ChatCompletionMessage } from "@/services/api/image";
 import { imageToDataUrl, uploadImage } from "@/services/image-storage";
-import { useAiConfigStore } from "@/stores/use-ai-config-store";
 import { useAssetStore } from "@/stores/use-asset-store";
-import { useConfigDialogStore } from "@/stores/use-config-dialog-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { ReferenceImage } from "@/types/image";
 import { DiaTextReveal } from "@/components/ui/dia-text-reveal";
@@ -42,10 +40,11 @@ type CanvasAssistantPanelProps = {
 
 export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onPasteImage, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
   const theme = canvasThemes[useThemeStore((state) => state.theme)];
-  const config = useAiConfigStore((state) => state.config);
+  const config = useConfigStore((state) => state.config);
+  const effectiveConfig = useEffectiveAiConfig(config);
   const cleanupImages = useAssetStore((state) => state.cleanupImages);
-  const updateConfig = useAiConfigStore((state) => state.updateConfig);
-  const openConfigDialog = useConfigDialogStore((state) => state.openConfigDialog);
+  const updateConfig = useConfigStore((state) => state.updateConfig);
+  const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
   const [width, setWidth] = useState(390);
   const [view, setView] = useState<"chat" | "history">("chat");
   const [mode, setMode] = useState<AssistantMode>("image");
@@ -137,8 +136,8 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
   };
 
   const sendMessage = async (text: string, nextMode: AssistantMode, history: CanvasAssistantMessage[], savedReferences?: CanvasAssistantReference[]) => {
-    const requestConfig = { ...config, model: nextMode === "image" ? config.imageModel || config.model : config.textModel || config.model };
-    if (!requestConfig.baseUrl.trim() || !requestConfig.model.trim() || !requestConfig.apiKey.trim()) {
+    const requestConfig = { ...effectiveConfig, model: nextMode === "image" ? effectiveConfig.imageModel || effectiveConfig.model : effectiveConfig.textModel || effectiveConfig.model };
+    if (!isAiConfigReady(requestConfig, requestConfig.model)) {
       openConfigDialog(true);
       return;
     }
@@ -290,7 +289,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
             prompt={prompt}
             isRunning={isRunning}
             references={selectedReferences}
-            config={config}
+            config={effectiveConfig}
             onModeChange={setMode}
             onPromptChange={setPrompt}
             onSubmit={submit}

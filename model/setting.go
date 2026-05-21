@@ -1,5 +1,7 @@
 package model
 
+import "encoding/json"
+
 type SettingKey string
 
 const (

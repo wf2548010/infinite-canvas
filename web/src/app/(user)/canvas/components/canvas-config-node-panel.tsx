@@ -6,10 +6,8 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Edit3, Eye, Image as ImageIc
 import { App, Button, Empty, Input, InputNumber, Modal, Segmented } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
-import { defaultConfig, type AiConfig } from "@/lib/ai-config";
+import { defaultConfig, useConfigStore, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { useAiConfigStore } from "@/stores/use-ai-config-store";
-import { useConfigDialogStore } from "@/stores/use-config-dialog-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasSizePicker } from "./canvas-size-picker";
 import type { NodeGenerationInput } from "./canvas-node-generation";
@@ -30,8 +28,8 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, inputs, o
   const [previewOpen, setPreviewOpen] = useState(false);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
-  const globalConfig = useAiConfigStore((state) => state.config);
-  const openConfigDialog = useConfigDialogStore((state) => state.openConfigDialog);
+  const globalConfig = useConfigStore((state) => state.config);
+  const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
   const theme = canvasThemes[useThemeStore((state) => state.theme)];
   const mode = node.metadata?.generationMode || "image";
   const config = buildNodeConfig(globalConfig, node, mode);

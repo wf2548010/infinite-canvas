@@ -5,10 +5,8 @@ import { ArrowUp, LoaderCircle } from "lucide-react";
 import { Button, InputNumber } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
-import { defaultConfig, type AiConfig } from "@/lib/ai-config";
+import { defaultConfig, useConfigStore, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { useAiConfigStore } from "@/stores/use-ai-config-store";
-import { useConfigDialogStore } from "@/stores/use-config-dialog-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasSizePicker } from "./canvas-size-picker";
@@ -25,8 +23,8 @@ type CanvasNodePromptPanelProps = {
 };
 
 export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate }: CanvasNodePromptPanelProps) {
-  const globalConfig = useAiConfigStore((state) => state.config);
-  const openConfigDialog = useConfigDialogStore((state) => state.openConfigDialog);
+  const globalConfig = useConfigStore((state) => state.config);
+  const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
   const theme = canvasThemes[useThemeStore((state) => state.theme)];
   const mode = defaultMode(node.type);
   const config = buildNodeConfig(globalConfig, node, mode);

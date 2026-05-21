@@ -8,14 +8,12 @@ import localforage from "localforage";
 import { ModelPicker } from "@/components/model-picker";
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
 import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
-import type { AiConfig } from "@/lib/ai-config";
+import { isAiConfigReady, useConfigStore, useEffectiveAiConfig, type AiConfig } from "@/stores/use-config-store";
 import { createId } from "@/lib/id";
 import { formatBytes, formatDuration, getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
 import { requestEdit, requestGeneration } from "@/services/api/image";
 import { uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
-import { useAiConfigStore } from "@/stores/use-ai-config-store";
-import { useConfigDialogStore } from "@/stores/use-config-dialog-store";
 import type { ReferenceImage } from "@/types/image";
 
 type GeneratedImage = {
@@ -61,9 +59,10 @@ const logStore = localforage.createInstance({ name: "infinite-canvas", storeName
 export default function ImagePage() {
   const { message } = App.useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const config = useAiConfigStore((state) => state.config);
-  const updateConfig = useAiConfigStore((state) => state.updateConfig);
-  const openConfigDialog = useConfigDialogStore((state) => state.openConfigDialog);
+  const config = useConfigStore((state) => state.config);
+  const effectiveConfig = useEffectiveAiConfig(config);
+  const updateConfig = useConfigStore((state) => state.updateConfig);
+  const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
   const addAsset = useAssetStore((state) => state.addAsset);
   const [prompt, setPrompt] = useState("");
   const [references, setReferences] = useState<ReferenceImage[]>([]);
@@ -80,7 +79,7 @@ export default function ImagePage() {
   const [previewLog, setPreviewLog] = useState<GenerationLog | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  const model = config.imageModel || config.model;
+  const model = effectiveConfig.imageModel || effectiveConfig.model;
   const canGenerate = Boolean(prompt.trim());
   const generationCount = Math.max(1, Math.min(10, Number(config.count) || 1));
 
@@ -128,7 +127,7 @@ export default function ImagePage() {
       message.error("请输入生图提示词");
       return;
     }
-    if (!config.baseUrl.trim() || !config.apiKey.trim() || !model) {
+    if (!isAiConfigReady(effectiveConfig, model)) {
       message.warning("请先完成配置");
       openConfigDialog(true);
       return;
@@ -241,12 +240,12 @@ export default function ImagePage() {
       message.error("请输入生图提示词");
       return null;
     }
-    if (!config.baseUrl.trim() || !config.apiKey.trim() || !model) {
+    if (!isAiConfigReady(effectiveConfig, model)) {
       message.warning("请先完成配置");
       openConfigDialog(true);
       return null;
     }
-    return { text, config: { ...config, model, count: "1" }, references: [...references] };
+    return { text, config: { ...effectiveConfig, model, count: "1" }, references: [...references] };
   };
 
   const runGenerationSlot = async (index: number, snapshot: { text: string; config: AiConfig; references: ReferenceImage[] }) => {
@@ -337,12 +336,12 @@ export default function ImagePage() {
                 </div>
 
                 <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm dark:border-stone-800 dark:bg-stone-900 sm:hidden">
-                  <span className="truncate text-stone-500 dark:text-stone-400">{model} · {config.size} · {config.quality}</span>
+                  <span className="truncate text-stone-500 dark:text-stone-400">{model} · {effectiveConfig.size} · {effectiveConfig.quality}</span>
                   <Button size="small" type="text" icon={<SlidersHorizontal className="size-4" />} onClick={() => setSettingsOpen(true)}>调整</Button>
                 </div>
 
                 <div className="hidden gap-4 sm:grid sm:grid-cols-2">
-                  <GenerationSettings config={config} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} />
+                  <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} />
                 </div>
               </div>
 
@@ -390,7 +389,7 @@ export default function ImagePage() {
       </Drawer>
       <Drawer title="参数" placement="bottom" size="default" open={settingsOpen} onClose={() => setSettingsOpen(false)}>
         <div className="grid grid-cols-2 gap-3">
-          <GenerationSettings config={config} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} />
+          <GenerationSettings config={effectiveConfig} model={model} updateConfig={updateConfig} openConfigDialog={openConfigDialog} />
         </div>
       </Drawer>
       <PromptSelectDialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen} onSelect={setPrompt} />

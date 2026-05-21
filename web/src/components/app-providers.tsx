@@ -7,9 +7,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 
+import { ClientRootInit } from "@/components/client-root-init";
 import { getAntThemeConfig } from "@/lib/app-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { useUserStore } from "@/stores/use-user-store";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,7 +23,6 @@ const queryClient = new QueryClient({
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const theme = useThemeStore((state) => state.theme);
-  const hydrateUser = useUserStore((state) => state.hydrateUser);
   const dark = theme === "dark";
 
   useEffect(() => {
@@ -31,15 +30,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
     document.documentElement.style.colorScheme = theme;
   }, [dark, theme]);
 
-  useEffect(() => {
-    void hydrateUser();
-  }, [hydrateUser]);
-
   return (
     <ConfigProvider locale={zhCN} theme={getAntThemeConfig(dark)}>
       <ProConfigProvider dark={dark}>
         <App>
-          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+          <QueryClientProvider client={queryClient}>
+            <ClientRootInit>{children}</ClientRootInit>
+          </QueryClientProvider>
         </App>
       </ProConfigProvider>
     </ConfigProvider>

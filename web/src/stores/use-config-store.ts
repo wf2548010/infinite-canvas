@@ -1,0 +1,123 @@
+"use client";
+
+import { useMemo } from "react";
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+import { apiGet } from "@/services/api/request";
+import type { AdminPublicSettings } from "@/services/api/admin";
+
+export type AiConfig = {
+  channelMode: "remote" | "local";
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  imageModel: string;
+  textModel: string;
+  systemPrompt: string;
+  models: string[];
+  quality: string;
+  size: string;
+  count: string;
+};
+
+export const CONFIG_STORE_KEY = "infinite-canvas:ai_config_store";
+
+export const defaultConfig: AiConfig = {
+  channelMode: "remote",
+  baseUrl: "https://api.openai.com",
+  apiKey: "",
+  model: "gpt-image-2",
+  imageModel: "gpt-image-2",
+  textModel: "gpt-5.5",
+  systemPrompt: "",
+  models: [],
+  quality: "auto",
+  size: "1:1",
+  count: "1",
+};
+
+type ConfigStore = {
+  config: AiConfig;
+  publicSettings: AdminPublicSettings | null;
+  isPublicSettingsLoading: boolean;
+  isConfigOpen: boolean;
+  shouldPromptContinue: boolean;
+  updateConfig: <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
+  loadPublicSettings: () => Promise<void>;
+  openConfigDialog: (shouldPromptContinue?: boolean) => void;
+  setConfigDialogOpen: (isOpen: boolean) => void;
+  clearPromptContinue: () => void;
+};
+
+export const useConfigStore = create<ConfigStore>()(
+  persist(
+    (set, get) => ({
+      config: defaultConfig,
+      publicSettings: null,
+      isPublicSettingsLoading: false,
+      isConfigOpen: false,
+      shouldPromptContinue: false,
+      updateConfig: (key, value) =>
+        set((state) => ({
+          config: {
+            ...state.config,
+            [key]: value,
+          },
+        })),
+      loadPublicSettings: async () => {
+        if (get().isPublicSettingsLoading) return;
+        set({ isPublicSettingsLoading: true });
+        try {
+          set({ publicSettings: await apiGet<AdminPublicSettings>("/api/settings") });
+        } finally {
+          set({ isPublicSettingsLoading: false });
+        }
+      },
+      openConfigDialog: (shouldPromptContinue = false) => set({ isConfigOpen: true, shouldPromptContinue }),
+      setConfigDialogOpen: (isConfigOpen) => set({ isConfigOpen }),
+      clearPromptContinue: () => set({ shouldPromptContinue: false }),
+    }),
+    {
+      name: CONFIG_STORE_KEY,
+      partialize: (state) => ({ config: state.config }),
+      merge: (persisted, current) => {
+        const config = { ...defaultConfig, ...((persisted as Partial<ConfigStore>).config || {}) };
+        return { ...current, config: { ...config, channelMode: config.channelMode || "remote", imageModel: config.imageModel || config.model, textModel: config.textModel || config.model } };
+      },
+    },
+  ),
+);
+
+export function useEffectiveAiConfig(config: AiConfig) {
+  const modelChannel = useConfigStore((state) => state.publicSettings?.modelChannel);
+
+  return useMemo(() => {
+    const channelMode = modelChannel?.allowCustomChannel ? config.channelMode : "remote";
+    if (channelMode === "local" || !modelChannel) return { ...config, channelMode };
+    const models = modelChannel.availableModels;
+    return {
+      ...config,
+      channelMode,
+      models,
+      model: models.includes(config.model) ? config.model : modelChannel.defaultModel,
+      imageModel: models.includes(config.imageModel) ? config.imageModel : modelChannel.defaultImageModel || modelChannel.defaultModel,
+      textModel: models.includes(config.textModel) ? config.textModel : modelChannel.defaultTextModel || modelChannel.defaultModel,
+      systemPrompt: modelChannel.systemPrompt,
+    };
+  }, [config, modelChannel]);
+}
+
+export function normalizeBaseUrl(value: string) {
+  return value.trim().replace(/\/+$/, "");
+}
+
+export function buildApiUrl(baseUrl: string, path: string) {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const apiBaseUrl = normalizedBaseUrl.endsWith("/v1") ? normalizedBaseUrl : `${normalizedBaseUrl}/v1`;
+  return `${apiBaseUrl}${path}`;
+}
+
+export function isAiConfigReady(config: AiConfig, model: string) {
+  return Boolean(model.trim()) && (config.channelMode === "remote" || Boolean(config.baseUrl.trim() && config.apiKey.trim()));
+}
