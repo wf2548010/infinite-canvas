@@ -116,7 +116,7 @@
 | `defaultImageModel` | string | 默认图片模型         |
 | `defaultTextModel` | string  | 默认文本模型         |
 | `systemPrompt`    | string   | 系统提示词          |
-| `allowCustomModel` | bool    | 是否允许用户自定义模型    |
+| `allowCustomChannel` | bool    | 是否允许用户自定义渠道，允许时前端可提供走后端渠道和自定义 baseUrl 直连两种模式 |
 
 `private.value` 当前字段：
 
@@ -128,13 +128,16 @@
 
 | 字段       | 类型       | 说明       |
 |----------|----------|----------|
-| `key`    | string   | 渠道标识     |
+| `protocol` | string | 协议，当前支持 `openai` |
 | `name`   | string   | 渠道名称     |
 | `baseUrl` | string  | 渠道接口地址   |
 | `apiKey` | string   | 渠道密钥     |
 | `models` | string[] | 渠道可用模型列表 |
+| `weight` | number   | 渠道权重，同一模型命中多个渠道时按权重随机 |
 | `enabled` | bool    | 是否启用     |
 | `remark` | string   | 备注       |
+
+后端请求模型时，先按模型名筛选启用且包含该模型的渠道，再按 `weight` 加权随机选择一个渠道。
 
 ### dicts
 

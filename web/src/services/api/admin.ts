@@ -1,5 +1,7 @@
 import { apiDelete, apiGet, apiPost, compactApiParams } from "@/services/api/request";
 import type { Prompt, PromptListResponse } from "@/services/api/prompts";
+import { buildApiUrl } from "@/lib/ai-config";
+import axios from "axios";
 
 export type AdminPromptCategory = {
   category: string;
@@ -83,11 +85,12 @@ export async function deleteAdminAsset(token: string, id: string) {
 }
 
 export type AdminModelChannel = {
-  key: string;
+  protocol: "openai";
   name: string;
   baseUrl: string;
   apiKey: string;
   models: string[];
+  weight: number;
   enabled: boolean;
   remark: string;
 };
@@ -98,7 +101,7 @@ export type AdminPublicSettings = {
   defaultImageModel: string;
   defaultTextModel: string;
   systemPrompt: string;
-  allowCustomModel: boolean;
+  allowCustomChannel: boolean;
 };
 
 export type AdminPrivateSettings = {
@@ -116,4 +119,38 @@ export async function fetchAdminSettings(token: string) {
 
 export async function saveAdminSettings(token: string, settings: AdminSettings) {
   return apiPost<AdminSettings>("/api/admin/settings", settings, token);
+}
+
+export async function fetchChannelModels(channel: Pick<AdminModelChannel, "baseUrl" | "apiKey">) {
+  try {
+    const response = await axios.get<{ data?: Array<{ id?: string }>; error?: { message?: string } }>(buildApiUrl(channel.baseUrl, "/models"), {
+      headers: { Authorization: `Bearer ${channel.apiKey}` },
+    });
+    return (response.data.data || [])
+      .map((item) => item.id)
+      .filter((id): id is string => Boolean(id))
+      .sort((a, b) => a.localeCompare(b));
+  } catch (error) {
+    throw new Error(readChannelError(error, "读取模型失败"));
+  }
+}
+
+export async function testChannelModel(channel: Pick<AdminModelChannel, "baseUrl" | "apiKey">, model: string) {
+  try {
+    const response = await axios.post<{ choices?: Array<{ message?: { content?: string } }>; error?: { message?: string } }>(
+      buildApiUrl(channel.baseUrl, "/chat/completions"),
+      { model, messages: [{ role: "user", content: "hi" }] },
+      { headers: { Authorization: `Bearer ${channel.apiKey}`, "Content-Type": "application/json" } },
+    );
+    return response.data.choices?.[0]?.message?.content || "ok";
+  } catch (error) {
+    throw new Error(readChannelError(error, "测试失败"));
+  }
+}
+
+function readChannelError(error: unknown, fallback: string) {
+  if (axios.isAxiosError<{ error?: { message?: string } }>(error)) {
+    return error.response?.data?.error?.message || (error.response?.status ? `${fallback}：${error.response.status}` : fallback);
+  }
+  return error instanceof Error ? error.message : fallback;
 }

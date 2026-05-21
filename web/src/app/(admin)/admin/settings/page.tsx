@@ -1,15 +1,15 @@
 "use client";
 
-import { CheckCircleOutlined, CodeOutlined, DeleteOutlined, FormatPainterOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, DeleteOutlined, FormatPainterOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { json } from "@codemirror/lang-json";
 import { tags } from "@lezer/highlight";
-import { App, Button, Card, Col, Flex, Form, Input, Row, Segmented, Select, Space, Switch, Tag, Typography } from "antd";
+import { App, Button, Card, Col, Drawer, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Switch, Table, Tabs, Tag, Typography } from "antd";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { EditorView } from "@uiw/react-codemirror";
 
-import { fetchAdminSettings, saveAdminSettings, type AdminSettings } from "@/services/api/admin";
+import { fetchAdminSettings, fetchChannelModels, saveAdminSettings, testChannelModel, type AdminModelChannel, type AdminSettings } from "@/services/api/admin";
 import { useUserStore } from "@/stores/use-user-store";
 
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
@@ -43,21 +43,37 @@ const emptySettings: AdminSettings = {
     defaultImageModel: "",
     defaultTextModel: "",
     systemPrompt: "",
-    allowCustomModel: false,
+    allowCustomChannel: false,
   },
   private: { channels: [] },
 };
+const emptyChannel: AdminModelChannel = { protocol: "openai", name: "", baseUrl: "", apiKey: "", models: [], weight: 1, enabled: true, remark: "" };
+
+type SettingsTabKey = "public" | "private";
+type EditorMode = "visual" | "json";
 
 export default function AdminSettingsPage() {
   const token = useUserStore((state) => state.token);
   const { message } = App.useApp();
   const [form] = Form.useForm<AdminSettings>();
-  const [mode, setMode] = useState<"visual" | "json">("visual");
-  const [jsonText, setJsonText] = useState("");
+  const [activeTab, setActiveTab] = useState<SettingsTabKey>("public");
+  const [editorMode, setEditorMode] = useState<Record<SettingsTabKey, EditorMode>>({ public: "visual", private: "visual" });
+  const [jsonText, setJsonText] = useState<Record<SettingsTabKey, string>>({ public: "", private: "" });
+  const [channels, setChannels] = useState<AdminModelChannel[]>([]);
+  const [channelForm] = Form.useForm<AdminModelChannel>();
+  const [editingChannelIndex, setEditingChannelIndex] = useState<number | null>(null);
+  const [isChannelDrawerOpen, setIsChannelDrawerOpen] = useState(false);
+  const [testChannelIndex, setTestChannelIndex] = useState<number | null>(null);
+  const [testKeyword, setTestKeyword] = useState("");
+  const [selectedTestModels, setSelectedTestModels] = useState<string[]>([]);
+  const [testingModels, setTestingModels] = useState<string[]>([]);
+  const [testResults, setTestResults] = useState<Record<string, { status: "success" | "error"; duration?: string; message: string }>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const models = Form.useWatch(["public", "availableModels"], form) || [];
-  const jsonError = mode === "json" ? getJsonError(jsonText) : "";
+  const activeMode = editorMode[activeTab];
+  const activeJsonText = jsonText[activeTab];
+  const jsonError = activeMode === "json" ? getJsonError(activeJsonText) : "";
 
   const loadSettings = async () => {
     if (!token) return;
@@ -65,7 +81,11 @@ export default function AdminSettingsPage() {
     try {
       const data = normalizeSettings(await fetchAdminSettings(token));
       form.setFieldsValue(data);
-      setJsonText(JSON.stringify(data, null, 2));
+      setChannels(data.private.channels);
+      setJsonText({
+        public: JSON.stringify(data.public, null, 2),
+        private: JSON.stringify(data.private, null, 2),
+      });
     } catch (error) {
       message.error(error instanceof Error ? error.message : "读取设置失败");
     } finally {
@@ -77,33 +97,25 @@ export default function AdminSettingsPage() {
     void loadSettings();
   }, [token]);
 
-  const changeMode = (nextMode: "visual" | "json") => {
-    if (nextMode === "json") {
-      const values = normalizeSettings(form.getFieldsValue(true) as AdminSettings);
-      setJsonText(JSON.stringify(values, null, 2));
-    } else {
-      const parsed = parseJsonSettings(jsonText);
-      if (!parsed) {
-        message.error("JSON 格式不正确");
-        return;
-      }
-      form.setFieldsValue(parsed);
-    }
-    setMode(nextMode);
+  const changeTab = (nextTab: SettingsTabKey) => {
+    setActiveTab(nextTab);
   };
 
   const saveSettings = async () => {
     if (!token) return;
-    const values = mode === "json" ? parseJsonSettings(jsonText) : normalizeSettings(await form.validateFields());
+    const values = await collectSettings(form, editorMode, jsonText, message);
     if (!values) {
-      message.error("JSON 格式不正确");
       return;
     }
     setIsSaving(true);
     try {
       const saved = normalizeSettings(await saveAdminSettings(token, values));
       form.setFieldsValue(saved);
-      setJsonText(JSON.stringify(saved, null, 2));
+      setChannels(saved.private.channels);
+      setJsonText({
+        public: JSON.stringify(saved.public, null, 2),
+        private: JSON.stringify(saved.private, null, 2),
+      });
       message.success("已保存");
     } catch (error) {
       message.error(error instanceof Error ? error.message : "保存失败");
@@ -112,92 +124,305 @@ export default function AdminSettingsPage() {
     }
   };
 
-  const formatJson = () => {
-    const parsed = parseJsonSettings(jsonText);
+  const toggleMode = (tab: SettingsTabKey, nextMode: EditorMode) => {
+    if (nextMode === "json") {
+      setJsonText((current) => ({
+        ...current,
+        [tab]: JSON.stringify(tab === "public" ? normalizePublicSetting(form.getFieldValue(["public"]) as Partial<AdminSettings["public"]>) : normalizePrivateSetting(form.getFieldValue(["private"]) as Partial<AdminSettings["private"]>), null, 2),
+      }));
+      setEditorMode((current) => ({ ...current, [tab]: nextMode }));
+      return;
+    }
+    const parsed = parseTabJson(tab, jsonText[tab]);
     if (!parsed) {
       message.error("JSON 格式不正确");
       return;
     }
-    setJsonText(JSON.stringify(parsed, null, 2));
+    form.setFieldsValue({ [tab]: parsed } as Partial<AdminSettings>);
+    if (tab === "private") setChannels((parsed as AdminSettings["private"]).channels);
+    setEditorMode((current) => ({ ...current, [tab]: nextMode }));
   };
+
+  const formatJson = (tab: SettingsTabKey) => {
+    const parsed = parseTabJson(tab, jsonText[tab]);
+    if (!parsed) {
+      message.error("JSON 格式不正确");
+      return;
+    }
+    setJsonText((current) => ({
+      ...current,
+      [tab]: JSON.stringify(parsed, null, 2),
+    }));
+  };
+
+  const openChannelDrawer = (index: number | null) => {
+    setEditingChannelIndex(index);
+    setIsChannelDrawerOpen(true);
+    channelForm.setFieldsValue(index === null ? emptyChannel : normalizeChannel(channels[index]));
+  };
+
+  const closeChannelDrawer = () => {
+    setIsChannelDrawerOpen(false);
+    setEditingChannelIndex(null);
+    channelForm.resetFields();
+  };
+
+  const saveChannel = async () => {
+    const channel = normalizeChannel(await channelForm.validateFields());
+    const nextChannels = [...channels];
+    if (editingChannelIndex === null) nextChannels.push(channel);
+    else nextChannels[editingChannelIndex] = channel;
+    setChannels(nextChannels);
+    form.setFieldValue(["private", "channels"], nextChannels);
+    closeChannelDrawer();
+  };
+
+  const fetchChannelModelList = async () => {
+    const channel = channelForm.getFieldsValue();
+    if (!channel?.baseUrl || !channel?.apiKey) {
+      message.warning("请先填写接口地址和 API Key");
+      return;
+    }
+    try {
+      const channelModels = await fetchChannelModels(channel);
+      channelForm.setFieldValue("models", channelModels);
+      message.success(`已获取 ${channelModels.length} 个模型`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "读取模型失败");
+    }
+  };
+
+  const openTestDialog = (index: number) => {
+    const channel = normalizeChannel(channels[index]);
+    if (!channel.baseUrl || !channel.apiKey || channel.models.length === 0) {
+      message.warning("请先填写接口地址、API Key 和至少一个模型");
+      return;
+    }
+    setTestChannelIndex(index);
+    setTestKeyword("");
+    setSelectedTestModels([]);
+    setTestingModels([]);
+    setTestResults({});
+  };
+
+  const closeTestDialog = () => {
+    setTestChannelIndex(null);
+    setTestKeyword("");
+    setSelectedTestModels([]);
+    setTestingModels([]);
+    setTestResults({});
+  };
+
+  const testModelOnline = async (model: string) => {
+    if (testChannelIndex === null) return;
+    const channel = normalizeChannel(channels[testChannelIndex]);
+    setTestingModels((current) => [...current, model]);
+    try {
+      const startedAt = performance.now();
+      const result = await testChannelModel(channel, model);
+      setTestResults((current) => ({ ...current, [model]: { status: "success", duration: `${((performance.now() - startedAt) / 1000).toFixed(2)}s`, message: result } }));
+    } catch (error) {
+      setTestResults((current) => ({ ...current, [model]: { status: "error", message: error instanceof Error ? error.message : "测试失败" } }));
+    } finally {
+      setTestingModels((current) => current.filter((item) => item !== model));
+    }
+  };
+
+  const batchTestModels = async () => {
+    for (const model of selectedTestModels) {
+      await testModelOnline(model);
+    }
+  };
+
+  const testChannel = testChannelIndex === null ? null : normalizeChannel(channels[testChannelIndex]);
+  const testModels = (testChannel?.models || []).filter((model) => model.toLowerCase().includes(testKeyword.trim().toLowerCase()));
 
   return (
     <main style={{ padding: 24 }}>
       <Flex vertical gap={16}>
         <Card variant="borderless">
           <Flex justify="space-between" align="center" gap={16} wrap>
+            <Tabs
+              activeKey={activeTab}
+              onChange={(key) => changeTab(key as SettingsTabKey)}
+              items={[
+                { key: "public", label: "公开配置（对外暴露）" },
+                { key: "private", label: "私有配置（不会对外暴露）" },
+              ]}
+            />
             <Space>
-              <Segmented value={mode} onChange={(value) => changeMode(value as "visual" | "json")} options={[{ label: "可视化编辑", value: "visual" }, { label: "手动编辑 JSON", value: "json" }]} />
               <Button icon={<ReloadOutlined />} loading={isLoading} onClick={() => void loadSettings()}>刷新</Button>
+              <Button type="primary" icon={<SaveOutlined />} loading={isSaving} onClick={() => void saveSettings()}>保存设置</Button>
             </Space>
-            <Button type="primary" icon={<SaveOutlined />} loading={isSaving} onClick={() => void saveSettings()}>保存设置</Button>
           </Flex>
         </Card>
 
-        {mode === "visual" ? (
-          <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
-            <Card title="公开配置" variant="borderless" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={24}><Form.Item name={["public", "availableModels"]} label="系统可用模型"><Select mode="tags" tokenSeparators={[",", "\n"]} options={models.map((item) => ({ label: item, value: item }))} /></Form.Item></Col>
-                <Col xs={24} md={8}><Form.Item name={["public", "defaultModel"]} label="默认模型"><Select showSearch allowClear options={models.map((item) => ({ label: item, value: item }))} /></Form.Item></Col>
-                <Col xs={24} md={8}><Form.Item name={["public", "defaultImageModel"]} label="默认图片模型"><Select showSearch allowClear options={models.map((item) => ({ label: item, value: item }))} /></Form.Item></Col>
-                <Col xs={24} md={8}><Form.Item name={["public", "defaultTextModel"]} label="默认文本模型"><Select showSearch allowClear options={models.map((item) => ({ label: item, value: item }))} /></Form.Item></Col>
-                <Col span={24}><Form.Item name={["public", "systemPrompt"]} label="系统提示词"><Input.TextArea rows={4} /></Form.Item></Col>
-                <Col span={24}><Form.Item name={["public", "allowCustomModel"]} label="允许用户自定义模型" valuePropName="checked"><Switch /></Form.Item></Col>
-              </Row>
-            </Card>
-
-            <Card title="模型渠道" variant="borderless">
-              <Form.List name={["private", "channels"]}>
-                {(fields, { add, remove }) => (
-                  <Flex vertical gap={12}>
-                    {fields.map((field) => (
-                      <div key={field.key} style={{ border: "1px solid var(--ant-color-border)", borderRadius: 6, padding: 16 }}>
-                        <Flex justify="space-between" align="center" style={{ marginBottom: 12 }}>
-                          <Typography.Text strong>{`渠道 ${field.name + 1}`}</Typography.Text>
-                          <Button danger type="text" icon={<DeleteOutlined />} onClick={() => remove(field.name)} />
-                        </Flex>
-                        <Row gutter={16}>
-                          <Col xs={24} md={8}><Form.Item name={[field.name, "key"]} label="渠道标识"><Input /></Form.Item></Col>
-                          <Col xs={24} md={8}><Form.Item name={[field.name, "name"]} label="渠道名称"><Input /></Form.Item></Col>
-                          <Col xs={24} md={8}><Form.Item name={[field.name, "enabled"]} label="启用" valuePropName="checked"><Switch /></Form.Item></Col>
-                          <Col xs={24} md={12}><Form.Item name={[field.name, "baseUrl"]} label="接口地址"><Input /></Form.Item></Col>
-                          <Col xs={24} md={12}><Form.Item name={[field.name, "apiKey"]} label="API Key"><Input.Password /></Form.Item></Col>
-                          <Col span={24}><Form.Item name={[field.name, "models"]} label="渠道可用模型"><Select mode="tags" tokenSeparators={[",", "\n"]} /></Form.Item></Col>
-                          <Col span={24}><Form.Item name={[field.name, "remark"]} label="备注"><Input.TextArea rows={2} /></Form.Item></Col>
-                        </Row>
-                      </div>
-                    ))}
-                    <Button icon={<PlusOutlined />} onClick={() => add({ key: "", name: "", baseUrl: "", apiKey: "", models: [], enabled: true, remark: "" })}>新增渠道</Button>
-                  </Flex>
-                )}
-              </Form.List>
-            </Card>
-          </Form>
-        ) : (
-          <Card variant="borderless">
-            <Flex justify="space-between" align="center" gap={12} wrap style={{ marginBottom: 12 }}>
+        <Card variant="borderless">
+          <Flex justify="space-between" align="center" gap={16} wrap style={{ marginBottom: 16 }}>
+            <Segmented
+              value={activeMode}
+              onChange={(value) => toggleMode(activeTab, value as EditorMode)}
+              options={[{ label: "可视化编辑", value: "visual" }, { label: "手动编辑 JSON", value: "json" }]}
+            />
+            {activeMode === "json" ? (
               <Space>
-                <CodeOutlined />
-                <Typography.Text strong>完整配置 JSON</Typography.Text>
                 {jsonError ? <Tag color="error">{jsonError}</Tag> : <Tag color="success" icon={<CheckCircleOutlined />}>JSON 格式正确</Tag>}
+                <Button icon={<FormatPainterOutlined />} onClick={() => formatJson(activeTab)}>格式化</Button>
               </Space>
-              <Button icon={<FormatPainterOutlined />} onClick={formatJson}>格式化</Button>
-            </Flex>
+            ) : (
+              <Typography.Text type="secondary">{activeTab === "public" ? "这些配置会暴露给前端读取" : "这些配置只会在后台保存"}</Typography.Text>
+            )}
+          </Flex>
+
+          {activeTab === "public" ? (
+            activeMode === "visual" ? (
+              <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
+                <Row gutter={16}>
+                  <Col span={24}><Form.Item name={["public", "availableModels"]} label="系统可用模型(请先添加渠道)"><Select mode="tags" tokenSeparators={[",", "\n"]} options={models.map((item) => ({ label: item, value: item }))} /></Form.Item></Col>
+                  <Col xs={24} md={8}><Form.Item name={["public", "defaultModel"]} label="默认模型"><Select showSearch allowClear options={models.map((item) => ({ label: item, value: item }))} /></Form.Item></Col>
+                  <Col xs={24} md={8}><Form.Item name={["public", "defaultImageModel"]} label="默认图片模型"><Select showSearch allowClear options={models.map((item) => ({ label: item, value: item }))} /></Form.Item></Col>
+                  <Col xs={24} md={8}><Form.Item name={["public", "defaultTextModel"]} label="默认文本模型"><Select showSearch allowClear options={models.map((item) => ({ label: item, value: item }))} /></Form.Item></Col>
+                  <Col span={24}><Form.Item name={["public", "systemPrompt"]} label="系统提示词"><Input.TextArea rows={4} /></Form.Item></Col>
+                  <Col span={24}><Form.Item name={["public", "allowCustomChannel"]} label="是否允许用户自定义渠道" extra="开启后，前端可提供走后端渠道和用户自定义 baseUrl 直连两种模式" valuePropName="checked"><Switch /></Form.Item></Col>
+                </Row>
+              </Form>
+            ) : (
+              <div style={{ overflow: "hidden", border: "1px solid var(--ant-color-border)", borderRadius: 6 }}>
+                <CodeMirror
+                  value={activeJsonText}
+                  height="520px"
+                  extensions={[json(), jsonEditorTheme, syntaxHighlighting(jsonHighlightStyle)]}
+                  basicSetup={{ foldGutter: true, lineNumbers: true, highlightActiveLine: true, highlightActiveLineGutter: true }}
+                  theme="none"
+                  onChange={(value) => setJsonText((current) => ({ ...current, public: value }))}
+                  className="admin-json-editor"
+                  style={{ fontSize: 13 }}
+                />
+              </div>
+            )
+          ) : activeMode === "visual" ? (
+            <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
+              <Flex vertical gap={12}>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => openChannelDrawer(null)}>新增渠道</Button>
+                <Table
+                  rowKey={(_, index) => String(index)}
+                  pagination={false}
+                  dataSource={channels}
+                  columns={[
+                    { title: "名称", dataIndex: "name", render: (value) => value || "未命名渠道" },
+                    { title: "协议", dataIndex: "protocol", width: 96, render: (value) => <Tag>{value || "openai"}</Tag> },
+                    { title: "状态", dataIndex: "enabled", width: 96, render: (value) => <Tag color={value ? "success" : "default"}>{value ? "已启用" : "已停用"}</Tag> },
+                    { title: "模型", dataIndex: "models", render: (value: string[]) => <Typography.Text ellipsis style={{ maxWidth: 360 }}>{modelSummary(value || [])}</Typography.Text> },
+                    { title: "权重", dataIndex: "weight", width: 88 },
+                    {
+                      title: "操作",
+                      key: "actions",
+                      width: 220,
+                      align: "right",
+                      render: (_, __, index) => (
+                        <Space size={4}>
+                          <Button size="small" onClick={() => openTestDialog(index)}>测试</Button>
+                          <Button size="small" onClick={() => openChannelDrawer(index)}>编辑</Button>
+                          <Button danger size="small" icon={<DeleteOutlined />} onClick={() => {
+                            const nextChannels = [...channels];
+                            nextChannels.splice(index, 1);
+                            setChannels(nextChannels);
+                            form.setFieldValue(["private", "channels"], nextChannels);
+                          }} />
+                        </Space>
+                      ),
+                    },
+                  ]}
+                />
+              </Flex>
+            </Form>
+          ) : (
             <div style={{ overflow: "hidden", border: "1px solid var(--ant-color-border)", borderRadius: 6 }}>
               <CodeMirror
-                value={jsonText}
-                height="560px"
+                value={activeJsonText}
+                height="520px"
                 extensions={[json(), jsonEditorTheme, syntaxHighlighting(jsonHighlightStyle)]}
                 basicSetup={{ foldGutter: true, lineNumbers: true, highlightActiveLine: true, highlightActiveLineGutter: true }}
                 theme="none"
-                onChange={setJsonText}
+                onChange={(value) => setJsonText((current) => ({ ...current, private: value }))}
                 className="admin-json-editor"
                 style={{ fontSize: 13 }}
               />
             </div>
-          </Card>
-        )}
+          )}
+        </Card>
+        <Drawer title={editingChannelIndex === null ? "新增渠道" : "编辑渠道"} open={isChannelDrawerOpen} width={560} onClose={closeChannelDrawer} extra={<Space><Button onClick={closeChannelDrawer}>取消</Button><Button type="primary" onClick={() => void saveChannel()}>保存</Button></Space>} destroyOnHidden>
+          <Form form={channelForm} layout="vertical" requiredMark={false} initialValues={emptyChannel}>
+            <Row gutter={16}>
+              <Col span={12}><Form.Item name="name" label="渠道名称" rules={[{ required: true, message: "请输入渠道名称" }]}><Input /></Form.Item></Col>
+              <Col span={12}><Form.Item name="protocol" label="协议"><Select options={[{ label: "OpenAI", value: "openai" }]} /></Form.Item></Col>
+              <Col span={12}><Form.Item name="weight" label="权重"><InputNumber min={1} step={1} className="!w-full" /></Form.Item></Col>
+              <Col span={12}><Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item></Col>
+              <Col span={24}><Form.Item name="baseUrl" label="接口地址" rules={[{ required: true, message: "请输入接口地址" }]}><Input /></Form.Item></Col>
+              <Col span={24}><Form.Item name="apiKey" label="API Key" rules={[{ required: true, message: "请输入 API Key" }]}><Input.Password /></Form.Item></Col>
+              <Col span={24}>
+                <Form.Item label="渠道可用模型">
+                  <Space.Compact style={{ width: "100%" }}>
+                    <Form.Item name="models" noStyle><Select mode="tags" tokenSeparators={[",", "\n"]} /></Form.Item>
+                    <Button icon={<ReloadOutlined />} onClick={() => void fetchChannelModelList()}>获取模型列表</Button>
+                  </Space.Compact>
+                </Form.Item>
+              </Col>
+              <Col span={24}><Form.Item name="remark" label="备注"><Input.TextArea rows={3} /></Form.Item></Col>
+            </Row>
+          </Form>
+        </Drawer>
+        <Modal
+          title={<Space>{testChannel?.name || "渠道"} 渠道的模型测试<Typography.Text type="secondary">共 {testChannel?.models.length || 0} 个模型</Typography.Text></Space>}
+          open={testChannelIndex !== null}
+          width={920}
+          onCancel={closeTestDialog}
+          footer={<Space><Button onClick={closeTestDialog}>取消</Button><Button type="primary" disabled={!selectedTestModels.length || testingModels.length > 0} onClick={() => void batchTestModels()}>批量测试 {selectedTestModels.length} 个模型</Button></Space>}
+          destroyOnHidden
+        >
+          <Flex vertical gap={12}>
+            <Typography.Text type="secondary">测试会向选中模型发送一条 hi，用于确认渠道是否有响应。</Typography.Text>
+            <Input.Search placeholder="搜索模型..." allowClear value={testKeyword} onChange={(event) => setTestKeyword(event.target.value)} />
+            <Table
+              rowKey="model"
+              pagination={false}
+              scroll={{ y: 420 }}
+              dataSource={testModels.map((model) => ({ model }))}
+              rowSelection={{
+                selectedRowKeys: selectedTestModels,
+                onChange: (keys) => setSelectedTestModels(keys.map(String)),
+              }}
+              columns={[
+                { title: "模型名称", dataIndex: "model", render: (value) => <Typography.Text strong>{value}</Typography.Text> },
+                {
+                  title: "状态",
+                  dataIndex: "model",
+                  width: 260,
+                  render: (value) => {
+                    if (testingModels.includes(value)) return <Tag color="processing">测试中</Tag>;
+                    const result = testResults[value];
+                    if (!result) return <Tag>未开始</Tag>;
+                    return result.status === "success" ? (
+                      <Space size={6} wrap>
+                        <Tag color="success">成功</Tag>
+                        <Typography.Text type="secondary">请求时长: {result.duration}</Typography.Text>
+                      </Space>
+                    ) : (
+                      <Typography.Text type="danger">{result.message}</Typography.Text>
+                    );
+                  },
+                },
+                {
+                  title: "操作",
+                  key: "actions",
+                  width: 120,
+                  align: "right",
+                  render: (_, item) => <Button size="small" loading={testingModels.includes(item.model)} onClick={() => void testModelOnline(item.model)}>测试</Button>,
+                },
+              ]}
+            />
+          </Flex>
+        </Modal>
       </Flex>
     </main>
   );
@@ -206,30 +431,74 @@ export default function AdminSettingsPage() {
 function normalizeSettings(settings: Partial<AdminSettings> = {}): AdminSettings {
   return {
     public: {
-      ...emptySettings.public,
-      ...(settings.public || {}),
-      availableModels: settings.public?.availableModels || [],
+      ...normalizePublicSetting(settings.public),
     },
     private: {
-      channels: (settings.private?.channels || []).map((item) => ({
-        key: item.key || "",
-        name: item.name || "",
-        baseUrl: item.baseUrl || "",
-        apiKey: item.apiKey || "",
-        models: item.models || [],
-        enabled: Boolean(item.enabled),
-        remark: item.remark || "",
-      })),
+      ...normalizePrivateSetting(settings.private),
     },
   };
 }
 
-function parseJsonSettings(value: string) {
+function normalizePublicSetting(setting: Partial<AdminSettings["public"]> = {}): AdminSettings["public"] {
+  return {
+    ...emptySettings.public,
+    ...setting,
+    availableModels: setting.availableModels || [],
+  };
+}
+
+function normalizePrivateSetting(setting: Partial<AdminSettings["private"]> = {}): AdminSettings["private"] {
+  return {
+    channels: (setting.channels || []).map(normalizeChannel),
+  };
+}
+
+function normalizeChannel(item: Partial<AdminModelChannel> = {}): AdminModelChannel {
+  return {
+    protocol: "openai",
+    name: item.name || "",
+    baseUrl: item.baseUrl || "",
+    apiKey: item.apiKey || "",
+    models: item.models || [],
+    weight: Math.max(1, Number(item.weight) || 1),
+    enabled: item.enabled !== false,
+    remark: item.remark || "",
+  };
+}
+
+function modelSummary(models: string[]) {
+  if (!models.length) return "未配置模型";
+  const preview = models.slice(0, 3).join(", ");
+  return models.length > 3 ? `${models.length} 个模型：${preview}...` : preview;
+}
+
+function parseTabJson(tab: SettingsTabKey, value: string) {
   try {
-    return normalizeSettings(JSON.parse(value) as AdminSettings);
+    return tab === "public" ? normalizePublicSetting(JSON.parse(value) as Partial<AdminSettings["public"]>) : normalizePrivateSetting(JSON.parse(value) as Partial<AdminSettings["private"]>);
   } catch {
     return null;
   }
+}
+
+async function collectSettings(form: any, editorMode: Record<SettingsTabKey, EditorMode>, jsonText: Record<SettingsTabKey, string>, message: { error: (value: string) => void }) {
+  const values = normalizeSettings(form.getFieldsValue(true) as AdminSettings);
+  if (editorMode.public === "json") {
+    const publicSetting = parseTabJson("public", jsonText.public);
+    if (!publicSetting) {
+      message.error("公开配置 JSON 格式不正确");
+      return null;
+    }
+    values.public = publicSetting;
+  }
+  if (editorMode.private === "json") {
+    const privateSetting = parseTabJson("private", jsonText.private);
+    if (!privateSetting) {
+      message.error("私有配置 JSON 格式不正确");
+      return null;
+    }
+    values.private = privateSetting;
+  }
+  return normalizeSettings(values);
 }
 
 function getJsonError(value: string) {
