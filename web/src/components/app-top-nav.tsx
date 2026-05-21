@@ -9,7 +9,7 @@ import { GitHubLink } from "@/components/github-link";
 import { UserStatusActions } from "@/components/user-status-actions";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { VersionReleaseModal } from "@/components/version-release-modal";
-import { useConfigStore, type AiConfig } from "@/stores/use-config-store";
+import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { navigationTools, type NavigationToolSlug } from "@/lib/navigation-tools";
 import { fetchImageModels } from "@/services/api/image";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -28,7 +28,6 @@ export function AppTopNav({ activeToolSlug, config, onConfigChange, hideHeader =
   const { message } = App.useApp();
   const [loadingModels, setLoadingModels] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || "dev";
   const isConfigOpen = useConfigStore((state) => state.isConfigOpen);
   const shouldPromptContinue = useConfigStore((state) => state.shouldPromptContinue);
   const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
@@ -40,16 +39,11 @@ export function AppTopNav({ activeToolSlug, config, onConfigChange, hideHeader =
   const isReady = useUserStore((state) => state.isReady);
   const logout = useUserStore((state) => state.clearSession);
   const publicSettings = useConfigStore((state) => state.publicSettings);
+  const effectiveConfig = useEffectiveConfig();
   const modelChannel = publicSettings?.modelChannel;
   const allowCustomChannel = modelChannel?.allowCustomChannel === true;
   const effectiveMode = allowCustomChannel ? config.channelMode : "remote";
-  const modelConfig = effectiveMode === "remote" && modelChannel ? {
-    ...config,
-    models: modelChannel.availableModels,
-    imageModel: modelChannel.availableModels.includes(config.imageModel) ? config.imageModel : modelChannel.defaultImageModel || modelChannel.defaultModel,
-    textModel: modelChannel.availableModels.includes(config.textModel) ? config.textModel : modelChannel.defaultTextModel || modelChannel.defaultModel,
-    systemPrompt: modelChannel.systemPrompt,
-  } : config;
+  const modelConfig = effectiveMode === "remote" ? effectiveConfig : config;
 
   const finishConfig = () => {
     setConfigDialogOpen(false);
@@ -163,7 +157,7 @@ export function AppTopNav({ activeToolSlug, config, onConfigChange, hideHeader =
                     aria-label={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}
                     title={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}
                   />
-                  <VersionReleaseModal currentVersion={appVersion} />
+                  <VersionReleaseModal />
                   <GitHubLink />
                   <Link href="/login" className="text-sm font-medium text-stone-600 underline-offset-4 transition hover:text-stone-950 hover:underline dark:text-stone-300 dark:hover:text-stone-100">
                     登录

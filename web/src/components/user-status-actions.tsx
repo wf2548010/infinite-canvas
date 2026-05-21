@@ -52,7 +52,6 @@ export function UserStatusActions({
   const theme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
   const storedUserName = useUserStore((state) => state.user?.username);
-  const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || "dev";
   const resolvedUserName = userName || storedUserName;
   const avatarText = initial || (resolvedUserName?.trim()[0] || "U").toUpperCase();
   const naturalIconClass = "inline-flex size-8 shrink-0 items-center justify-center text-stone-600 transition hover:text-stone-950 dark:text-stone-300 dark:hover:text-white [&_svg]:size-4";
@@ -79,7 +78,7 @@ export function UserStatusActions({
         aria-label={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}
         title={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}
       />
-      <VersionReleaseModal currentVersion={appVersion} style={versionStyle} />
+      <VersionReleaseModal style={versionStyle} />
       <GitHubLink className={cn("bg-transparent hover:bg-transparent dark:hover:bg-transparent", gitHubClassName)} style={gitHubStyle} />
       <div ref={accountRef}>
         <Dropdown

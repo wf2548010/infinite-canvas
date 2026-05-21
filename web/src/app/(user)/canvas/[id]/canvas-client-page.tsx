@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Home, ImageIcon, Images, Keyboard, List, LogOut, Menu, MessageSquare, Plus, Redo2, Settings2, Trash2, Undo2, Upload } from "lucide-react";
 
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
-import { defaultConfig, isAiConfigReady, resolveEffectiveConfig, type AiConfig, useConfigStore } from "@/stores/use-config-store";
+import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { nanoid } from "nanoid";
 import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
@@ -231,7 +231,8 @@ function InfiniteCanvasPage() {
   });
 
   const config = useConfigStore((state) => state.config);
-  const effectiveConfig = useConfigStore((state) => resolveEffectiveConfig(state.config, state.publicSettings?.modelChannel || null));
+  const effectiveConfig = useEffectiveConfig();
+  const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
   const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
   const addAsset = useAssetStore((state) => state.addAsset);
   const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);

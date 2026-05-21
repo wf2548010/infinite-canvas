@@ -7,7 +7,7 @@ import { motion } from "motion/react";
 
 import { ImageGenerationPending } from "@/components/image-generation-pending";
 import { ModelPicker } from "@/components/model-picker";
-import { isAiConfigReady, resolveEffectiveConfig, useConfigStore, type AiConfig } from "@/stores/use-config-store";
+import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { nanoid } from "nanoid";
 import { cn } from "@/lib/utils";
@@ -41,9 +41,10 @@ type CanvasAssistantPanelProps = {
 export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onPasteImage, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
   const theme = canvasThemes[useThemeStore((state) => state.theme)];
   const config = useConfigStore((state) => state.config);
-  const effectiveConfig = useConfigStore((state) => resolveEffectiveConfig(state.config, state.publicSettings?.modelChannel || null));
+  const effectiveConfig = useEffectiveConfig();
   const cleanupImages = useAssetStore((state) => state.cleanupImages);
   const updateConfig = useConfigStore((state) => state.updateConfig);
+  const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
   const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
   const [width, setWidth] = useState(390);
   const [view, setView] = useState<"chat" | "history">("chat");

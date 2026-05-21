@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -44,10 +45,30 @@ type ConfigStore = {
   shouldPromptContinue: boolean;
   updateConfig: <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
   loadPublicSettings: () => Promise<void>;
+  isAiConfigReady: (config: AiConfig, model: string) => boolean;
   openConfigDialog: (shouldPromptContinue?: boolean) => void;
   setConfigDialogOpen: (isOpen: boolean) => void;
   clearPromptContinue: () => void;
 };
+
+function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
+  const channelMode = modelChannel?.allowCustomChannel ? config.channelMode : "remote";
+  if (channelMode === "local" || !modelChannel) return { ...config, channelMode };
+  const models = modelChannel.availableModels;
+  return {
+    ...config,
+    channelMode,
+    models,
+    model: models.includes(config.model) ? config.model : modelChannel.defaultModel,
+    imageModel: models.includes(config.imageModel) ? config.imageModel : modelChannel.defaultImageModel || modelChannel.defaultModel,
+    textModel: models.includes(config.textModel) ? config.textModel : modelChannel.defaultTextModel || modelChannel.defaultModel,
+    systemPrompt: modelChannel.systemPrompt,
+  };
+}
+
+function isAiConfigReady(config: AiConfig, model: string) {
+  return Boolean(model.trim()) && (config.channelMode === "remote" || Boolean(config.baseUrl.trim() && config.apiKey.trim()));
+}
 
 export const useConfigStore = create<ConfigStore>()(
   persist(
@@ -73,6 +94,7 @@ export const useConfigStore = create<ConfigStore>()(
           set({ isPublicSettingsLoading: false });
         }
       },
+      isAiConfigReady: (config, model) => isAiConfigReady(config, model),
       openConfigDialog: (shouldPromptContinue = false) => set({ isConfigOpen: true, shouldPromptContinue }),
       setConfigDialogOpen: (isConfigOpen) => set({ isConfigOpen }),
       clearPromptContinue: () => set({ shouldPromptContinue: false }),
@@ -88,27 +110,14 @@ export const useConfigStore = create<ConfigStore>()(
   ),
 );
 
-export function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
-  const channelMode = modelChannel?.allowCustomChannel ? config.channelMode : "remote";
-  if (channelMode === "local" || !modelChannel) return { ...config, channelMode };
-  const models = modelChannel.availableModels;
-  return {
-    ...config,
-    channelMode,
-    models,
-    model: models.includes(config.model) ? config.model : modelChannel.defaultModel,
-    imageModel: models.includes(config.imageModel) ? config.imageModel : modelChannel.defaultImageModel || modelChannel.defaultModel,
-    textModel: models.includes(config.textModel) ? config.textModel : modelChannel.defaultTextModel || modelChannel.defaultModel,
-    systemPrompt: modelChannel.systemPrompt,
-  };
+export function useEffectiveConfig() {
+  const config = useConfigStore((state) => state.config);
+  const modelChannel = useConfigStore((state) => state.publicSettings?.modelChannel || null);
+  return useMemo(() => resolveEffectiveConfig(config, modelChannel), [config, modelChannel]);
 }
 
 export function buildApiUrl(baseUrl: string, path: string) {
   const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, "");
   const apiBaseUrl = normalizedBaseUrl.endsWith("/v1") ? normalizedBaseUrl : `${normalizedBaseUrl}/v1`;
   return `${apiBaseUrl}${path}`;
-}
-
-export function isAiConfigReady(config: AiConfig, model: string) {
-  return Boolean(model.trim()) && (config.channelMode === "remote" || Boolean(config.baseUrl.trim() && config.apiKey.trim()));
 }
