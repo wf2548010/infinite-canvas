@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App } from "antd";
 
-import { deleteAdminUser, fetchAdminUsers, saveAdminUser, type AdminUser } from "@/services/api/admin";
+import { adjustAdminUserCredits, deleteAdminUser, fetchAdminUsers, saveAdminUser, type AdminUser } from "@/services/api/admin";
 import { useUserStore } from "@/stores/use-user-store";
 
 const defaultPageSize = 10;
@@ -43,6 +43,15 @@ export function useAdminUsers() {
         onError: (error) => message.error(error instanceof Error ? error.message : "删除失败"),
     });
 
+    const creditMutation = useMutation({
+        mutationFn: ({ id, credits }: { id: string; credits: number }) => adjustAdminUserCredits(token, id, credits),
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+            message.success("算力点已调整");
+        },
+        onError: (error) => message.error(error instanceof Error ? error.message : "调整失败"),
+    });
+
     useEffect(() => {
         if (query.isError) {
             const errorMessage = query.error instanceof Error ? query.error.message : "读取用户失败";
@@ -67,13 +76,14 @@ export function useAdminUsers() {
         page,
         pageSize,
         total: data?.total || 0,
-        isLoading: query.isFetching || saveMutation.isPending || deleteMutation.isPending,
+        isLoading: query.isFetching || saveMutation.isPending || deleteMutation.isPending || creditMutation.isPending,
         searchUsers: (value = keyword) => updateFilters({ keyword: value }),
         changePage: (value: number) => updateFilters({ page: value }),
         changePageSize: (value: number) => updateFilters({ pageSize: value }),
         resetFilters: () => updateFilters({ keyword: "", page: 1, pageSize: defaultPageSize }),
         refreshUsers: () => query.refetch(),
         saveUser: (user: Partial<AdminUser> & { password?: string }) => saveMutation.mutateAsync(user),
+        adjustCredits: (id: string, credits: number) => creditMutation.mutateAsync({ id, credits }),
         deleteUser: (id: string) => deleteMutation.mutateAsync(id),
     };
 }
