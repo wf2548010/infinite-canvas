@@ -4,10 +4,20 @@ import copyToClipboard from "copy-to-clipboard";
 import { Bot, Copy, KeyRound, Link2, PlugZap, RefreshCw, Terminal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { DOCS_URL } from "@/constant/env";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { fetchWorkbuddyConfig, fetchWorkbuddyStatus, saveWorkbuddyConfig } from "@/services/api/canvas-agent";
 
 const LOCAL_AGENT_COMMAND = "npx -y @zhuyichuan/canvas-agent";
+
+const CURSOR_MCP_JSON = `{
+  "mcpServers": {
+    "infinite-canvas": {
+      "command": "npx",
+      "args": ["-y", "@zhuyichuan/canvas-agent", "mcp"]
+    }
+  }
+}`;
 
 export function AgentConnectView({
     theme,
@@ -32,7 +42,7 @@ export function AgentConnectView({
     onTokenChange: (value: string) => void;
     onToggleEnabled: () => void;
 }) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { message } = App.useApp();
     const [wbToken, setWbToken] = useState("");
     const [wbOnline, setWbOnline] = useState<boolean | null>(null);
@@ -89,10 +99,14 @@ export function AgentConnectView({
     const statusText = connectError ? t("agent.status.failed") : connected ? activity : enabled ? t("agent.status.connecting") : t("agent.status.disconnected");
     const statusColor = connectError ? "#dc2626" : connected ? "#16a34a" : enabled ? "#d97706" : theme.node.muted;
 
-    const copyCommand = (command: string) => {
+    const copyCommand = (command: string, successKey = "agent.connect.commandCopied") => {
         copyToClipboard(command);
-        message.success(t("agent.connect.commandCopied"));
+        message.success(t(successKey));
     };
+
+    const cursorDocsUrl = i18n.language.startsWith("zh")
+        ? `${DOCS_URL}/zh-CN/docs/overview/cursor-connector`
+        : `${DOCS_URL}/docs/overview/cursor-connector`;
 
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
@@ -229,6 +243,40 @@ export function AgentConnectView({
                     </div>
                     <div className="mt-2 text-[11px] leading-4" style={{ color: theme.node.muted }}>
                         提示：在 WorkBuddy 连接器中心安装 Infinite Canvas 连接器后，亦可自动按需启动。
+                    </div>
+                </div>
+
+                {/* 4. Cursor MCP 配置引导 */}
+                <div className="rounded-lg border p-3.5" style={{ borderColor: theme.node.stroke }}>
+                    <div className="flex items-center gap-2">
+                        <Bot className="size-4 shrink-0" />
+                        <div className="text-sm font-medium leading-5">{t("agent.connect.cursorTitle")}</div>
+                    </div>
+                    <div className="mt-1 text-xs leading-5" style={{ color: theme.node.muted }}>
+                        {t("agent.connect.cursorText")}
+                    </div>
+                    <div className="mt-2 text-[11px] leading-4" style={{ color: theme.node.muted }}>
+                        {t("agent.connect.cursorPathHint")}
+                    </div>
+                    <div className="mt-2.5 flex items-start gap-2 rounded-md border bg-transparent px-2 py-1.5" style={{ borderColor: theme.node.stroke, color: theme.node.text }}>
+                        <code className="thin-scrollbar min-w-0 flex-1 overflow-x-auto whitespace-pre text-[11px] leading-5">{CURSOR_MCP_JSON}</code>
+                        <Tooltip title={t("agent.connect.cursorCopyJson")}>
+                            <Button
+                                size="small"
+                                type="text"
+                                className="!h-6 !w-6 !min-w-6 shrink-0"
+                                icon={<Copy className="size-3.5" />}
+                                onClick={() => copyCommand(CURSOR_MCP_JSON, "agent.connect.cursorJsonCopied")}
+                            />
+                        </Tooltip>
+                    </div>
+                    <div className="mt-2.5 flex flex-wrap gap-2">
+                        <Button className="!h-8 !px-3" icon={<Copy className="size-3.5" />} onClick={() => copyCommand(CURSOR_MCP_JSON, "agent.connect.cursorJsonCopied")}>
+                            {t("agent.connect.cursorCopyJson")}
+                        </Button>
+                        <Button className="!h-8 !px-3" onClick={() => window.open(cursorDocsUrl, "_blank", "noopener,noreferrer")}>
+                            {t("agent.connect.cursorDocs")}
+                        </Button>
                     </div>
                 </div>
             </div>

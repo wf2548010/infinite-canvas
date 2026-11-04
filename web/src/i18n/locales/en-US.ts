@@ -1518,7 +1518,13 @@ export default {
             "localAddress": "Local address",
             "urlPlaceholder": "For example http://127.0.0.1:17371",
             "token": "Connection token",
-            "tokenPlaceholder": "Discover automatically or enter the Connect token"
+            "tokenPlaceholder": "Discover automatically or enter the Connect token",
+            "cursorTitle": "Connect Infinite Canvas in Cursor",
+            "cursorText": "Add the MCP config in Cursor to read and operate the canvas that is already connected in the browser.",
+            "cursorCopyJson": "Copy MCP JSON",
+            "cursorJsonCopied": "MCP JSON copied",
+            "cursorPathHint": "Merge into ~/.cursor/mcp.json, or save as .cursor/mcp.json in a project",
+            "cursorDocs": "Open Cursor connector docs"
         },
         "history": {
             "workspace": "Workspace",

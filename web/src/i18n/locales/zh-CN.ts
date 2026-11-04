@@ -1518,7 +1518,13 @@ export default {
             "localAddress": "本地地址",
             "urlPlaceholder": "例如 http://127.0.0.1:17371",
             "token": "连接 Token",
-            "tokenPlaceholder": "自动发现，或手动填入 Connect token"
+            "tokenPlaceholder": "自动发现，或手动填入 Connect token",
+            "cursorTitle": "在 Cursor 中连接无限画布",
+            "cursorText": "将 MCP 配置写入 Cursor 后，可在 Cursor 对话里读取和操作当前已连接的画布。",
+            "cursorCopyJson": "复制 MCP JSON",
+            "cursorJsonCopied": "MCP JSON 已复制",
+            "cursorPathHint": "合并到 ~/.cursor/mcp.json，或复制为项目内 .cursor/mcp.json",
+            "cursorDocs": "查看 Cursor 连接文档"
         },
         "history": {
             "workspace": "工作空间",
