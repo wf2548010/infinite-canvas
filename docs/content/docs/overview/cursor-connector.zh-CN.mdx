@@ -1,0 +1,138 @@
+---
+title: Cursor 连接器
+description: 在 Cursor 中通过 MCP 连接并操作 Infinite Canvas
+---
+
+# Cursor 连接器
+
+Infinite Canvas 提供 Cursor 连接器，基于 MCP（Model Context Protocol）与本地 `@zhuyichuan/canvas-agent` 伴生服务协同工作。在 Cursor 中配置 MCP 后，可在 Agent 对话里通过自然语言打开画布、读取节点与连线、创建内容并编排多模态生成流程。
+
+```text
+Cursor Agent  →  MCP（mcp.json）  →  npx @zhuyichuan/canvas-agent mcp  →  浏览器中已连接的画布
+```
+
+连接器工程源码位于仓库的 `plugins/cursor-connector/` 目录（含 `mcp.json`、`mcp.project.example.json` 与 `skills/canvas/SKILL.md`）。
+
+## 前置条件
+
+- 本机 **Node.js 20+**，可正常执行 `npx`（首次运行需联网拉取 `@zhuyichuan/canvas-agent`）。
+- 浏览器中已打开目标 **Infinite Canvas**，且在画布 **Agent → 连接** 中 **本地 Canvas Agent 已连接**（多数读写工具依赖活跃会话）。
+- 在 Cursor **设置 / Customize → MCP** 中启用 `infinite-canvas` 服务；修改配置后按 Cursor 习惯刷新 MCP 或重启。
+
+## 安装与配置
+
+### 方式一：全局配置（所有项目）
+
+1. 打开或创建 `~/.cursor/mcp.json`。
+2. 将下方 `mcpServers` 中的 `infinite-canvas` 段合并进现有配置（保留其他 MCP 服务）。
+3. 保存后在 Cursor 中确认 MCP 已启用。
+
+### 方式二：项目级配置
+
+1. 将 `plugins/cursor-connector/mcp.project.example.json` 复制为项目根目录下的 `.cursor/mcp.json`。
+2. 或仅把 `infinite-canvas` 条目合并进项目已有的 `.cursor/mcp.json`。
+
+本仓库 **不** 在根目录提交 `.cursor/mcp.json`；请使用 `plugins/cursor-connector/` 中的示例在本地启用。
+
+### MCP 配置内容
+
+与 `plugins/cursor-connector/mcp.json` 一致：
+
+```json
+{
+  "mcpServers": {
+    "infinite-canvas": {
+      "command": "npx",
+      "args": ["-y", "@zhuyichuan/canvas-agent", "mcp"]
+    }
+  }
+}
+```
+
+> **提示**：此配置不含 API Key。请勿在 MCP 配置中提交密钥或私有路径；画布侧 AI 仍使用浏览器本地渠道配置。
+
+---
+
+## 验证示例
+
+画布已打开且 Agent 已连接时，在 Cursor 对话中尝试：
+
+```text
+读取当前画布状态
+```
+
+```text
+读取当前画布上的节点和连线状态，帮我做个总结
+```
+
+应返回节点/视口摘要，而非持续的「未连接」类错误。也可选将 `plugins/cursor-connector/skills/canvas/SKILL.md` 加入 Cursor Skills，便于 Agent 按统一工具流程操作。
+
+## 与 WorkBuddy 连接器的关系
+
+两者共用同一套 **`@zhuyichuan/canvas-agent` MCP 工具**（如 `canvas_get_state`、`canvas_open`、生成与排版类工具），仅 **客户端与安装路径** 不同：WorkBuddy 使用开放平台扩展包或 WorkBuddy 专用 MCP 字段；Cursor 使用 `~/.cursor/mcp.json` 或项目 `.cursor/mcp.json`。WorkBuddy 安装说明见 [WorkBuddy 连接器](/zh-CN/docs/overview/workbuddy-connector)。
+
+---
+
+## 常用交互示例
+
+### 1. 打开与唤醒画布
+
+```text
+打开 Infinite Canvas 画布
+```
+
+```text
+进入我最近打开的 Infinite Canvas 工程
+```
+
+### 2. 读取与理解画布结构
+
+```text
+看看我当前选中的是哪个节点，基于它扩写三个脑暴分支
+```
+
+### 3. 创建内容与编排工作流
+
+```text
+在画布中心创建一个关于短视频脚本框架的文本节点
+```
+
+```text
+帮我在画布上创建一个文生图工作流，提示词是赛博朋克城市雨夜
+```
+
+---
+
+## 核心工具一览
+
+| 工具名称 | 功能说明 |
+| :--- | :--- |
+| `canvas_open` | 在系统浏览器中打开 Infinite Canvas（支持 `new` / `recent` / `choose`），并注入连接凭据 |
+| `canvas_get_state` | 获取当前画布节点、连线及视口信息 |
+| `canvas_get_selection` | 获取当前选中的节点集合 |
+| `canvas_create_text_node` | 创建单个文本节点 |
+| `canvas_create_text_nodes` | 批量创建文本节点并自动布局 |
+| `canvas_create_image_prompt_flow` | 创建提示词节点并连接到生图配置 |
+| `canvas_create_generation_flow` | 编排多模态（文案/生图/视频）生成流程 |
+| `canvas_generate_text` | 触发文本生成 |
+| `canvas_generate_image` | 触发图片生成 |
+| `canvas_generate_video` | 触发视频生成 |
+| `canvas_apply_ops` | 批量原子操作（增删改节点与连线） |
+| `canvas_move_nodes` | 移动节点位置 |
+| `canvas_export_snapshot` | 导出画布快照 JSON |
+
+---
+
+## 常见问题
+
+### 提示未连接画布 / 工具调用失败
+
+先在浏览器打开 Infinite Canvas，进入 **Agent → 连接** 并连接本地 Agent，再重试。也可让 Agent 调用 `canvas_open` 启动浏览器并完成配对。
+
+### `npx` 失败（网络、超时、 registry）
+
+检查网络与代理；在本机终端手动运行 `npx -y @zhuyichuan/canvas-agent mcp` 排查；确认 Cursor 启动 MCP 时使用的环境中有 **Node 20+**。必要时配置 npm 镜像。
+
+### MCP 未启用或工具列表中没有 infinite-canvas
+
+确认 `mcp.json` 为合法 JSON、服务名为 `infinite-canvas`，并在 Cursor MCP 设置中开启；修改配置后刷新 MCP。

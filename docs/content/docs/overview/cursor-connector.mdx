@@ -1,0 +1,138 @@
+---
+title: Cursor Connector
+description: Connect and operate Infinite Canvas from Cursor via MCP
+---
+
+# Cursor Connector
+
+Infinite Canvas provides a Cursor connector built on MCP (Model Context Protocol) and the local `@zhuyichuan/canvas-agent` companion service. After you add the MCP config in Cursor, you can use natural language in Agent chat to open canvases, inspect nodes and edges, create content, and orchestrate multimodal generation flows.
+
+```text
+Cursor Agent  →  MCP (mcp.json)  →  npx @zhuyichuan/canvas-agent mcp  →  browser canvas (Agent connected)
+```
+
+Connector source files live in `plugins/cursor-connector/` (`mcp.json`, `mcp.project.example.json`, and `skills/canvas/SKILL.md`).
+
+## Prerequisites
+
+- **Node.js 20+** with working `npx` (network access to fetch `@zhuyichuan/canvas-agent` on first run).
+- **Infinite Canvas** open in a browser, with the **local Canvas Agent connected** (Agent → Connect). Most read/write tools need an active session.
+- **MCP enabled in Cursor** (Settings / Customize → MCP). Refresh MCP or restart Cursor after editing config if tools do not appear.
+
+## Installation & Setup
+
+### Method 1: Global config (all projects)
+
+1. Open or create `~/.cursor/mcp.json`.
+2. Merge the `infinite-canvas` entry below into your existing `mcpServers` object (keep other servers).
+3. Save and confirm the server is enabled in Cursor.
+
+### Method 2: Project-only
+
+1. Copy `plugins/cursor-connector/mcp.project.example.json` to `.cursor/mcp.json` in your project root.
+2. Or merge only the `infinite-canvas` block into an existing project `.cursor/mcp.json`.
+
+This repository does **not** commit a root `.cursor/mcp.json`; use the examples under `plugins/cursor-connector/` locally.
+
+### MCP configuration
+
+Identical to `plugins/cursor-connector/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "infinite-canvas": {
+      "command": "npx",
+      "args": ["-y", "@zhuyichuan/canvas-agent", "mcp"]
+    }
+  }
+}
+```
+
+> **Note**: This config has no API key. Do not commit secrets in MCP files; AI channels remain configured in the browser.
+
+---
+
+## Verification
+
+With the canvas open and Agent connected, try in Cursor chat:
+
+```text
+Read the current canvas state
+```
+
+```text
+Read the current canvas nodes and connections, and give me a summary
+```
+
+You should get a node/viewport summary, not a persistent connection error. Optionally add `plugins/cursor-connector/skills/canvas/SKILL.md` to Cursor Skills so the agent follows the same tool workflow.
+
+## Relationship to the WorkBuddy connector
+
+Both use the same **`@zhuyichuan/canvas-agent` MCP tools** (`canvas_get_state`, `canvas_open`, generation and layout tools, etc.). Only the **client and install path** differ: WorkBuddy uses the open-platform package or WorkBuddy-specific MCP fields; Cursor uses `~/.cursor/mcp.json` or project `.cursor/mcp.json`. See [WorkBuddy Connector](/docs/overview/workbuddy-connector) for WorkBuddy setup.
+
+---
+
+## Example Interactions
+
+### 1. Launch & connect canvas
+
+```text
+Open Infinite Canvas
+```
+
+```text
+Open my most recent Infinite Canvas project
+```
+
+### 2. Read board state
+
+```text
+Check the currently selected node and generate 3 brainstorming branches from it
+```
+
+### 3. Create content and workflows
+
+```text
+Create a text card explaining short-video script frameworks in the center of the board
+```
+
+```text
+Create a text-to-image workflow for a cyberpunk rainy night scene
+```
+
+---
+
+## Exposed MCP Tools
+
+| Tool Name | Description |
+| :--- | :--- |
+| `canvas_open` | Opens Infinite Canvas in the default browser (`new`, `recent`, `choose`) with credentials injected |
+| `canvas_get_state` | Retrieves nodes, connections, and viewport bounds |
+| `canvas_get_selection` | Gets currently selected nodes |
+| `canvas_create_text_node` | Adds a single text node |
+| `canvas_create_text_nodes` | Batch-creates text nodes with layout |
+| `canvas_create_image_prompt_flow` | Creates prompt nodes linked to image generation |
+| `canvas_create_generation_flow` | Assembles multimodal generation pipelines |
+| `canvas_generate_text` | Triggers text generation |
+| `canvas_generate_image` | Triggers image generation |
+| `canvas_generate_video` | Triggers video generation |
+| `canvas_apply_ops` | Applies atomic create/update/delete/connect operations |
+| `canvas_move_nodes` | Repositions nodes |
+| `canvas_export_snapshot` | Exports full canvas snapshot JSON |
+
+---
+
+## FAQ
+
+### “No canvas connected” / tool errors
+
+Open Infinite Canvas in the browser, connect the local Agent under Agent → Connect, then retry. You can also ask the agent to call `canvas_open`.
+
+### `npx` failures (network, timeout, registry)
+
+Check network and proxy; run `npx -y @zhuyichuan/canvas-agent mcp` manually; ensure Node 20+ is on PATH in the environment Cursor uses to spawn MCP.
+
+### MCP disabled or missing tools
+
+Validate JSON in `mcp.json`, confirm the server name is `infinite-canvas`, enable MCP in Cursor, and refresh after changes.

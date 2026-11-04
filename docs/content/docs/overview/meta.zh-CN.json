@@ -5,6 +5,7 @@
   "pages": [
     "quick-start",
     "workbuddy-connector",
+    "cursor-connector",
     "features",
     "render",
     "docker",
