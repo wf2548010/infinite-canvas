@@ -81,4 +81,4 @@ Confirm `~/.cursor/mcp.json` or project `.cursor/mcp.json` is valid JSON, server
 
 ## Source
 
-Canonical config lives in this directory under `plugins/cursor-connector/`. Documentation on the docs site (Task 2) will mirror these steps.
+Canonical config lives in this directory under `plugins/cursor-connector/`. Docs: `/docs/overview/cursor-connector` and `/zh-CN/docs/overview/cursor-connector`.
