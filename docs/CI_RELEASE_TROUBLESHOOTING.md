@@ -2,7 +2,9 @@
 
 本文记录 GitHub Actions 在「文档站构建、Docker 镜像发布、GitHub Pages」链路上踩过的坑及根因，供复刻 / 发版时对照排查。
 
-本项目的发布类 workflow 统一由**打版本 tag（`v*`）**触发，见 `.github/workflows/`：
+仓库里目前实际提交的是 `.github/workflows/ci.yml`：push 和 pull request 时用 bun 跑 `web` 测试，用 npm 跑 `canvas-agent` 测试。`web/` 的依赖锁是 `bun.lock`。
+
+下面这些发布类 workflow 设计为由**打版本 tag（`v*`）**触发。文件不在 `.github/workflows/` 里时，对应流水线不会运行：
 
 | Workflow | 作用 | 触发 |
 | --- | --- | --- |

@@ -396,7 +396,6 @@ function CanvasNodesTab({
                         className="ml-auto flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10"
                         style={{
                             color: checked.size ? theme.toolbar.activeText : theme.node.text,
-                            background: checked.size ? theme.toolbar.activeBg : "transparent",
                         }}
                     >
                         <Download className="size-3.5" />

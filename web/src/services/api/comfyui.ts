@@ -12,6 +12,8 @@ import {
     DEFAULT_COMFYUI_VIDEO_WORKFLOW,
     getWorkflowForModelProfile,
 } from "./comfyui-default-workflows";
+import { resolveBindingInputSlot } from "./comfyui-slot-probe";
+import { lockVideoSizePreset } from "@/components/video-settings-panel";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
 
@@ -317,30 +319,25 @@ export function generateRandomSeed(): number {
     return Math.floor(Math.random() * 1_000_000_000_000_000);
 }
 
-/**
- * _meta.title → class_type → input slot for ComfyUI parameters.
- */
-const BINDING_TITLE_TO_INPUT_SLOT: Record<string, Record<string, string>> = {
-    prompt: { CLIPTextEncode: "text", PrimitiveStringMultiline: "value", PrimitiveString: "value", TextEncodeBooguEdit: "prompt", TextEncodeQwenImageEditPlus: "prompt" },
-    width: { PrimitiveInt: "value", PrimitiveFloat: "value" },
-    height: { PrimitiveInt: "value", PrimitiveFloat: "value" },
-    seed: { KSampler: "seed", KSamplerAdvanced: "noise_seed", PrimitiveInt: "value", PrimitiveFloat: "value" },
-    ref_image: { LoadImage: "image", LoadImageMask: "image" },
-    ref_mask: { LoadImage: "image", LoadImageMask: "image" },
-    caption: { PrimitiveStringMultiline: "value", PrimitiveString: "value", CLIPTextEncode: "text" },
-    lyrics: { PrimitiveStringMultiline: "value", PrimitiveString: "value", CLIPTextEncode: "text" },
-    duration: { Float: "Number", PrimitiveInt: "value", PrimitiveFloat: "value" },
-};
+type BindingNodeRecord = { class_type?: string; inputs?: Record<string, unknown>; _meta?: { title?: unknown } };
+
+function writeBinding(record: BindingNodeRecord, category: string, title: string, value: unknown) {
+    const slot = resolveBindingInputSlot(category, record.class_type, record.inputs);
+    if (!slot || !record.inputs) {
+        throw new ComfyuiError(`工作流节点「${title}」（${record.class_type || "未知类型"}）标记了 ${category}，但没有可写入的输入`);
+    }
+    record.inputs[slot] = value;
+}
 
 /**
  * Deep-copy a workflow and write generation params into the nodes marked by
  * _meta.title ("prompt", "width", "height", "seed", "ref_image", "ref_mask").
- * Nodes with a known title but an unrecognized class_type check fallback slot names before being skipped.
+ * A marked node must expose a known input name; otherwise binding fails loudly.
  * The original workflow object is never mutated.
  */
 export function applyBindings(workflow: ComfyuiWorkflowJson, params: ComfyuiBindings): ComfyuiWorkflowJson {
     const cloned = structuredClone(workflow);
-    type NodeRecord = { class_type?: string; inputs?: Record<string, unknown>; _meta?: { title?: unknown } };
+    type NodeRecord = BindingNodeRecord;
     let boundSeed = false;
     for (const node of Object.values(cloned)) {
         if (typeof node !== "object" || node === null) continue;
@@ -348,38 +345,19 @@ export function applyBindings(workflow: ComfyuiWorkflowJson, params: ComfyuiBind
         const rawTitle = record._meta?.title;
         if (typeof rawTitle !== "string" || !record.class_type || !record.inputs) continue;
         const title = rawTitle.trim().toLowerCase();
-        let slot: string | undefined;
-        let value: unknown;
-        if (title === "prompt" && params.prompt !== undefined) {
-            slot = BINDING_TITLE_TO_INPUT_SLOT.prompt[record.class_type] || ("value" in record.inputs ? "value" : "text" in record.inputs ? "text" : "prompt" in record.inputs ? "prompt" : undefined);
-            value = params.prompt;
-        } else if (title === "width" && params.width !== undefined) {
-            slot = BINDING_TITLE_TO_INPUT_SLOT.width[record.class_type] || ("value" in record.inputs ? "value" : "width" in record.inputs ? "width" : undefined);
-            value = params.width;
-        } else if (title === "height" && params.height !== undefined) {
-            slot = BINDING_TITLE_TO_INPUT_SLOT.height[record.class_type] || ("value" in record.inputs ? "value" : "height" in record.inputs ? "height" : undefined);
-            value = params.height;
-        } else if (title === "seed" && params.seed !== undefined) {
-            slot = BINDING_TITLE_TO_INPUT_SLOT.seed[record.class_type];
-            if (!slot) {
-                if ("seed" in record.inputs) slot = "seed";
-                else if ("noise_seed" in record.inputs) slot = "noise_seed";
-                else if ("value" in record.inputs) slot = "value";
-            }
-            value = params.seed;
+        if (title === "prompt" && params.prompt !== undefined) writeBinding(record, "prompt", title, params.prompt);
+        else if (title === "width" && params.width !== undefined) writeBinding(record, "width", title, params.width);
+        else if (title === "height" && params.height !== undefined) writeBinding(record, "height", title, params.height);
+        else if (title === "seed" && params.seed !== undefined) {
+            writeBinding(record, "seed", title, params.seed);
             boundSeed = true;
         } else if (title.startsWith("ref_image") && params.refImages?.length) {
             const m = /^ref_image_(\d{2})$/.exec(title);
             const index = m ? Number(m[1]) - 1 : 0;
-            if (params.refImages[index]) {
-                slot = BINDING_TITLE_TO_INPUT_SLOT.ref_image[record.class_type] || "image";
-                value = params.refImages[index];
-            }
+            if (params.refImages[index]) writeBinding(record, "ref_image", title, params.refImages[index]);
         } else if ((title === "ref_mask" || title === "mask" || title === "ref_mask_01") && params.refMask) {
-            slot = BINDING_TITLE_TO_INPUT_SLOT.ref_mask[record.class_type] || "image";
-            value = params.refMask;
+            writeBinding(record, "ref_mask", title, params.refMask);
         }
-        if (slot) record.inputs[slot] = value;
     }
     // Fallback: if no node had _meta.title === "seed", find any sampler with a literal numeric seed
     if (!boundSeed && params.seed !== undefined) {
@@ -3205,11 +3183,15 @@ export async function submitComfyuiVideoJob(req: ComfyuiVideoRequest): Promise<{
             }
             const firstFrameImg = frameImages[0];
             const lastFrameImg = frameImages[1];
-            if (firstFrameImg?.dataUrl) {
-                firstFrameAssetId = await uploadComfyuiAsset(baseUrl, token, firstFrameImg.dataUrl, "first_frame.png", req.signal);
+            if (firstFrameImg) {
+                const payload = firstFrameImg.dataUrl || firstFrameImg.url;
+                if (!payload) throw new ComfyuiError("参考图 1 缺少可上传的图像数据，已停止提交");
+                firstFrameAssetId = await uploadComfyuiAsset(baseUrl, token, payload, "first_frame.png", req.signal);
             }
-            if (lastFrameImg?.dataUrl) {
-                lastFrameAssetId = await uploadComfyuiAsset(baseUrl, token, lastFrameImg.dataUrl, "last_frame.png", req.signal);
+            if (lastFrameImg) {
+                const payload = lastFrameImg.dataUrl || lastFrameImg.url;
+                if (!payload) throw new ComfyuiError("参考图 2 缺少可上传的图像数据，已停止提交");
+                lastFrameAssetId = await uploadComfyuiAsset(baseUrl, token, payload, "last_frame.png", req.signal);
             }
         } else {
             // 全能参考模式 - 严格校验（Fail-loud）
@@ -3226,11 +3208,9 @@ export async function submitComfyuiVideoJob(req: ComfyuiVideoRequest): Promise<{
             // 上传图片参考资产
             if (req.references?.length) {
                 for (let i = 0; i < req.references.length; i++) {
-                    const dataUrl = req.references[i]?.dataUrl;
-                    if (dataUrl) {
-                        const id = await uploadComfyuiAsset(baseUrl, token, dataUrl, `ref_${i + 1}.png`, req.signal);
-                        assetIds.push(id);
-                    }
+                    const payload = req.references[i]?.dataUrl || req.references[i]?.url;
+                    if (!payload) throw new ComfyuiError(`参考图 ${i + 1} 缺少可上传的图像数据，已停止提交`);
+                    assetIds.push(await uploadComfyuiAsset(baseUrl, token, payload, `ref_${i + 1}.png`, req.signal));
                 }
             }
 
@@ -3241,10 +3221,8 @@ export async function submitComfyuiVideoJob(req: ComfyuiVideoRequest): Promise<{
                     const ref = req.referenceVideos[i];
                     const rawUrl = ref?.url || (ref as unknown as { dataUrl?: string })?.dataUrl || (ref as unknown as { src?: string })?.src || "";
                     const resolvedUrl = toolSourceUrl || await resolveMediaUrl(ref?.storageKey, rawUrl);
-                    if (resolvedUrl) {
-                        const id = await uploadComfyuiAsset(baseUrl, token, resolvedUrl, `ref_video_${i + 1}.mp4`, req.signal);
-                        videoAssetIds.push(id);
-                    }
+                    if (!resolvedUrl) throw new ComfyuiError(`参考视频 ${i + 1} 缺少可上传的内容，已停止提交`);
+                    videoAssetIds.push(await uploadComfyuiAsset(baseUrl, token, resolvedUrl, `ref_video_${i + 1}.mp4`, req.signal));
                 }
             }
 
@@ -3255,17 +3233,13 @@ export async function submitComfyuiVideoJob(req: ComfyuiVideoRequest): Promise<{
                     const ref = req.referenceAudios[i];
                     const rawUrl = ref?.url || (ref as unknown as { dataUrl?: string })?.dataUrl || (ref as unknown as { src?: string })?.src || "";
                     const resolvedUrl = await resolveMediaUrl(ref?.storageKey, rawUrl);
-                    if (resolvedUrl) {
-                        const id = await uploadComfyuiAsset(baseUrl, token, resolvedUrl, `ref_audio_${i + 1}.mp3`, req.signal);
-                        audioAssetIds.push(id);
-                    }
+                    if (!resolvedUrl) throw new ComfyuiError(`参考音频 ${i + 1} 缺少可上传的内容，已停止提交`);
+                    audioAssetIds.push(await uploadComfyuiAsset(baseUrl, token, resolvedUrl, `ref_audio_${i + 1}.mp3`, req.signal));
                 }
             }
         }
 
-        const sizeMatch = (req.config.size || "").match(/^(\d+)x(\d+)$/);
-        const width = sizeMatch ? Number(sizeMatch[1]) : 544;
-        const height = sizeMatch ? Number(sizeMatch[2]) : 960;
+        const { width, height } = lockVideoSizePreset(req.config.size);
         const duration = req.config.videoSeconds ? Number(req.config.videoSeconds) : 5;
 
         const seed = req.seed !== undefined ? req.seed : generateRandomSeed() % 1_000_000_000;

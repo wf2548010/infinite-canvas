@@ -180,6 +180,21 @@ describe("applyBindings", () => {
         expect((workflow["1"] as TestWorkflowNode).inputs.text).toBe("old");
         expect(bound["1"]).not.toBe(workflow["1"]);
     });
+
+    it("throws when a titled prompt node has no injectable input", () => {
+        const workflow: ComfyuiWorkflowJson = {
+            "1": { inputs: { foo: "" }, class_type: "CustomEncode", _meta: { title: "prompt" } },
+        };
+        expect(() => applyBindings(workflow, { prompt: "写不进去" })).toThrow(/prompt/);
+    });
+
+    it("binds a reference image through the image input even when class_type is unknown", () => {
+        const workflow: ComfyuiWorkflowJson = {
+            "1": { inputs: { image: "old.png" }, class_type: "CustomLoad", _meta: { title: "ref_image_01" } },
+        };
+        const bound = applyBindings(workflow, { refImages: ["asset_1"] });
+        expect((bound["1"] as TestWorkflowNode).inputs.image).toBe("asset_1");
+    });
 });
 
 describe("generateRandomSeed", () => {
@@ -1058,6 +1073,31 @@ describe("native ComfyUI video validation", () => {
 
     afterEach(() => {
         vi.unstubAllGlobals();
+    });
+
+    it("rejects an omni reference that has no uploadable payload before submission", async () => {
+        await expect(
+            submitComfyuiVideoJob({
+                config: { ...buildFrameVideoConfig(), size: "1280x736" },
+                prompt: "动画",
+                model: "omni-video-minimax-h3-fp8-4step-pdmd",
+                videoMode: "omni",
+                references: [{ id: "1", name: "1.png", type: "image/png", dataUrl: "" }],
+            }),
+        ).rejects.toThrow(/参考图 1/);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects a video size outside the hardware presets before submission", async () => {
+        await expect(
+            submitComfyuiVideoJob({
+                config: { ...buildFrameVideoConfig(), size: "1000x500" },
+                prompt: "动画",
+                model: "custom-video",
+                videoMode: "omni",
+            }),
+        ).rejects.toThrow(/硬件预设/);
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it("rejects more than two frame images before upload or submission", async () => {

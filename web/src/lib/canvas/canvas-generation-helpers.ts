@@ -85,6 +85,26 @@ export async function restoreGenerationContext(metadata: CanvasNodeMetadata): Pr
     };
 }
 
+export async function loadGenerationContext(args: {
+    intent?: string;
+    prompt: string;
+    sourceMetadata?: CanvasNodeMetadata;
+    live: () => Promise<NodeGenerationInputContext>;
+}): Promise<NodeGenerationInputContext> {
+    if (args.intent !== "repeat") return args.live();
+    const source = args.sourceMetadata || {};
+    const saved = await restoreGenerationContext({
+        ...source,
+        effectivePrompt: args.prompt === source.prompt ? source.effectivePrompt : args.prompt,
+    });
+    if (!saved) throw new Error(i18n.t("canvas.projectPage.generationSnapshotMissing"));
+    return saved;
+}
+
+export function isResumableGenerationJob(record?: { jobId?: string; isTimeout?: boolean; jobResumable?: boolean } | null): boolean {
+    return Boolean(record?.jobId && (record.isTimeout || record.jobResumable));
+}
+
 export async function resolveMetadataReferences(metadata: CanvasNodeMetadata) {
     if (metadata.generationType !== "edit") return [];
     if (!metadata.references?.length) return null;

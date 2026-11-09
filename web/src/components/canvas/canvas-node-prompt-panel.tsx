@@ -202,7 +202,7 @@ export function CanvasNodePromptPanel({
                     content: (
                         <div className="space-y-2 pt-2 text-xs">
                             <div>当前视频节点存在以下约束限制，请修正后再生成：</div>
-                            <div className="space-y-1 rounded bg-stone-100 p-2 dark:bg-stone-800">
+                            <div className="space-y-1 rounded bg-black/5 p-2 dark:bg-white/10">
                                 {videoModelAvailability.reasons.map((r, i) => (
                                     <div key={i} className="flex items-start gap-1.5">
                                         <span className="text-amber-500 font-bold">•</span>
@@ -226,7 +226,7 @@ export function CanvasNodePromptPanel({
                     content: (
                         <div className="space-y-2 pt-2 text-xs">
                             <div>当前图片节点存在以下约束限制，请修正后再生成：</div>
-                            <div className="space-y-1 rounded bg-stone-100 p-2 dark:bg-stone-800">
+                            <div className="space-y-1 rounded bg-black/5 p-2 dark:bg-white/10">
                                 {imageModelAvailability.reasons.map((r, i) => (
                                     <div key={i} className="flex items-start gap-1.5">
                                         <span className="text-amber-500 font-bold">•</span>
@@ -277,24 +277,24 @@ export function CanvasNodePromptPanel({
             {savedDraftReferenceHint}
             {mode === "text" && connectedResources.images > 0 && (
                 <div className="mb-2 flex items-center gap-1.5 overflow-x-auto text-xs py-0.5">
-                    <span className="shrink-0 text-stone-400 dark:text-stone-500">快捷指令:</span>
+                    <span className="shrink-0 opacity-45">快捷指令:</span>
                     <button
                         type="button"
-                        className="shrink-0 rounded-full border border-stone-200 px-2.5 py-0.5 text-xs transition hover:border-purple-400 hover:text-purple-500 dark:border-stone-700"
+                        className="shrink-0 rounded-full border border-black/10 px-2.5 py-0.5 text-xs transition hover:border-purple-400 hover:text-purple-500 dark:border-white/15"
                         onClick={() => updatePrompt("请根据参考图片反推一段适合用于 AI 生图的提示词。涵盖主体、构图、光影、色彩与质感。")}
                     >
                         生图反推
                     </button>
                     <button
                         type="button"
-                        className="shrink-0 rounded-full border border-stone-200 px-2.5 py-0.5 text-xs transition hover:border-purple-400 hover:text-purple-500 dark:border-stone-700"
+                        className="shrink-0 rounded-full border border-black/10 px-2.5 py-0.5 text-xs transition hover:border-purple-400 hover:text-purple-500 dark:border-white/15"
                         onClick={() => updatePrompt("详细分析提取这张图片的视觉风格、艺术流派、配色方案与渲染材质。")}
                     >
                         风格提取
                     </button>
                     <button
                         type="button"
-                        className="shrink-0 rounded-full border border-stone-200 px-2.5 py-0.5 text-xs transition hover:border-purple-400 hover:text-purple-500 dark:border-stone-700"
+                        className="shrink-0 rounded-full border border-black/10 px-2.5 py-0.5 text-xs transition hover:border-purple-400 hover:text-purple-500 dark:border-white/15"
                         onClick={() => updatePrompt("用详细的自然语言描述画面中的主体、人物姿态、镜头机位与环境分镜。")}
                     >
                         分镜描述

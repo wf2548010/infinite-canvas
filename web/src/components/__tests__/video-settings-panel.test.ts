@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     extractVideoSizeTiers,
     normalizeVideoSizeValue,
+    lockVideoSizePreset,
     parseVideoSize,
     videoSecondsLabel,
     videoSizeLabel,
@@ -23,6 +24,12 @@ describe("Video Settings Panel DSL & Sizing Helpers", () => {
     it("extractVideoSizeTiers falls back to default tiers when no values provided", () => {
         const tiers = extractVideoSizeTiers(undefined);
         expect(tiers).toEqual(MINIMAX_VIDEO_SIZE_TIERS);
+    });
+
+    it("lockVideoSizePreset accepts a 9:16 preset and rejects an arbitrary size", () => {
+        expect(lockVideoSizePreset("736x1280")).toEqual({ width: 736, height: 1280 });
+        expect(lockVideoSizePreset("")).toEqual({ width: 544, height: 960 });
+        expect(() => lockVideoSizePreset("1000x500")).toThrow(/硬件预设/);
     });
 
     it("parseVideoSize correctly resolves 16:9 landscape dimensions and matching tier", () => {

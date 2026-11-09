@@ -246,11 +246,11 @@ export function useCanvasCollab({
 
     // Broadcast patch (Host only)
     const broadcastNodesPatch = useCallback(
-        (nodes: CanvasNodeData[], connections: CanvasConnection[]) => {
+        (nodes: CanvasNodeData[], connections: CanvasConnection[], options?: { uploadAssets?: boolean }) => {
             const state = useCollabStore.getState();
             if (state.role !== "host" || !state.activeRoomId) return;
 
-            uploadAllNodesAssets(nodes);
+            if (options?.uploadAssets !== false) uploadAllNodesAssets(nodes);
             const sharedNodes = nodes.map(sanitizeNodeForCollab);
 
             send({

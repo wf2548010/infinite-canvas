@@ -13,10 +13,7 @@ export function registerTaskDriver(protocol: string, driver: TaskLifecycleDriver
 export function getTaskDriver(protocol?: string): TaskLifecycleDriver {
     const key = (protocol || "comfyui").toLowerCase();
     const driver = driverRegistry.get(key);
-    if (!driver) {
-        // 平滑回退到默认 comfyui 驱动
-        return comfyuiTaskDriver;
-    }
+    if (!driver) throw new Error(`不支持的任务协议：${key}`);
     return driver;
 }
 

@@ -1,7 +1,7 @@
 {
     "name": "comfyui-task",
     "version": "0.1.0",
-    "description": "Local ComfyUI workflow runner — reads _meta.title-bound workflows from stdin, submits via comfy-api-proxy, downloads outputs.",
+    "description": "Legacy ComfyUI workflow runner. Slot binding matches the web app, but submission still targets the removed comfy-api-proxy. Use the browser app against native port 8188.",
     "type": "module",
     "main": "./src/index.ts",
     "bin": {

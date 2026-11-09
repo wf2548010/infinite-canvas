@@ -34,7 +34,7 @@ import {
 } from "@/services/api/comfyui-default-workflows";
 import i18n from "@/i18n";
 
-export type ApiCallFormat = "openai" | "gemini" | "comfyui";
+export type ApiCallFormat = "comfyui";
 export type ModelCapability = "image" | "video" | "text" | "audio";
 export type ReasoningEffort = "auto" | "low" | "medium" | "high" | "xhigh";
 

@@ -44,7 +44,7 @@ describe("failCanvasGeneration", () => {
         const slots = key === "images" ? { images: [image("slot", { jobId: "accepted", queuePosition: 3, networkRetryText: "重连中" })] } : { texts: [text("slot", { jobId: "accepted", queuePosition: 3, networkRetryText: "重连中" })] };
         const result = node(key === "images" ? CanvasNodeType.Image : CanvasNodeType.Text, { status: "loading", jobId: "unrelated", ...slots });
         const [failed] = failCanvasGeneration([result], { nodeId: result.id, slotId: "slot", error: new TaskExecutionError(connectionError, "timeout") });
-        expect(failed.metadata).toMatchObject({ status: "error", errorDetails: connectionError, jobId: "accepted", isTimeout: true });
+        expect(failed.metadata).toMatchObject({ status: "error", errorDetails: connectionError, jobId: "accepted", isTimeout: true, jobResumable: true });
         expect(failed.metadata?.[key]?.[0]).toMatchObject({ status: "error", errorDetails: connectionError, jobId: "accepted", isTimeout: true });
         expect(failed.metadata?.[key]?.[0].queuePosition).toBeUndefined();
         expect(failed.metadata?.[key]?.[0].networkRetryText).toBeUndefined();
@@ -62,6 +62,7 @@ describe("failCanvasGeneration", () => {
         const result = node(CanvasNodeType.Video, { status: "loading" });
         const [failed] = failCanvasGeneration([result], { nodeId: result.id, error: new TaskExecutionError(connectionError, "network", { jobId: "accepted" }) });
         expect(failed.metadata?.jobId).toBe("accepted");
+        expect(failed.metadata?.jobResumable).toBe(true);
     });
 
     it.each(["lost", "cancelled", "execution_failed"] as const)("clears accepted IDs on terminal %s errors even when the message mentions network or timeout", (category) => {

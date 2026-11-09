@@ -1,6 +1,6 @@
 # comfyui-task
 
-Local ComfyUI workflow runner. Reads an API-format workflow from stdin, resolves `_meta.title` bindings, submits to a `comfy-api-proxy`, polls until done, downloads outputs.
+Legacy workflow runner. `_meta.title` slot binding now uses the same input-name probe as the web app. Submission still talks to the removed `comfy-api-proxy` (default port 8189). The current canvas talks to native ComfyUI on port 8188 directly; do not point this CLI at 8188 and expect it to work.
 
 Built for the `infinite-canvas` web app's ComfyUI integration, but usable as a standalone CLI.
 

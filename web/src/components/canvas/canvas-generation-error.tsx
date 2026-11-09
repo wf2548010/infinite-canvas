@@ -1,7 +1,7 @@
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { localizeErrorDetails } from "@/lib/canvas/canvas-generation-helpers";
+import { isResumableGenerationJob, localizeErrorDetails } from "@/lib/canvas/canvas-generation-helpers";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
@@ -12,7 +12,7 @@ export function CanvasGenerationError({ node, errorDetails, onRetry }: { node?: 
     const slots = (node?.type === CanvasNodeType.Image ? node.metadata?.images : node?.type === CanvasNodeType.Text ? node.metadata?.texts : undefined) || [];
     const failures = slots.filter((slot) => slot.status === "error");
     const details = localizeErrorDetails(failures.find((slot) => slot.errorDetails)?.errorDetails || node?.metadata?.errorDetails || errorDetails) || t("canvas.node.failed");
-    const canResume = Boolean(failures[0] ? failures[0].jobId : node?.metadata?.jobId);
+    const canResume = isResumableGenerationJob(failures.find((slot) => isResumableGenerationJob(slot)) || (failures.length ? undefined : node?.metadata));
 
     return (
         <section

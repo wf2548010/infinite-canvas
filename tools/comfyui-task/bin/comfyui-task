@@ -9,7 +9,7 @@ const program = new Command();
 
 program
     .name("comfyui-task")
-    .description("Submit a ComfyUI workflow (read from stdin) to a local comfy-api-proxy and download outputs.")
+    .description("Legacy runner: submit a workflow from stdin to the removed comfy-api-proxy and download outputs.")
     .version("0.1.0");
 
 interface RunFlags {

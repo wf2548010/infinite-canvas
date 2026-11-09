@@ -27,15 +27,8 @@ export const localForageStorage: StateStorage = {
     },
     setItem: async (name, value) => {
         if (typeof window === "undefined") return;
-        try {
-            if (typeof localforage?.setItem === "function") {
-                await localforage.setItem(name, value);
-                return;
-            }
-            window.localStorage?.setItem(name, value);
-        } catch {
-            window.localStorage?.setItem(name, value);
-        }
+        if (typeof localforage?.setItem !== "function") throw new Error("本地存储不可用");
+        await localforage.setItem(name, value);
     },
     removeItem: async (name) => {
         if (typeof window === "undefined") return;

@@ -18,7 +18,9 @@ import {
     isJobExecutionError,
     isLostOrNotFoundGenerationError,
     isNetworkGenerationError,
+    isResumableGenerationJob,
     isTimeoutGenerationError,
+    loadGenerationContext,
     resetInterruptedGeneration,
     restoreGenerationContext,
     shouldMarkGenerationSourceStatus,
@@ -561,6 +563,78 @@ describe("resetInterruptedGeneration with jobId persistence", () => {
         expect(reset.metadata?.status).toBe("error");
         expect(reset.metadata?.jobId).toBe("job-456");
         expect(reset.metadata?.images?.[0].jobId).toBe("job-456");
+    });
+});
+
+describe("isResumableGenerationJob", () => {
+    it("resumes only a kept job that timed out or was marked resumable", () => {
+        expect(isResumableGenerationJob({ jobId: "job-1", isTimeout: true })).toBe(true);
+        expect(isResumableGenerationJob({ jobId: "job-1", jobResumable: true })).toBe(true);
+        expect(isResumableGenerationJob({ jobId: "job-1" })).toBe(false);
+        expect(isResumableGenerationJob({ isTimeout: true })).toBe(false);
+    });
+});
+
+describe("loadGenerationContext", () => {
+    const live = async () => ({
+        prompt: "live",
+        generationReferences: [],
+        referenceImages: [],
+        referenceVideos: [],
+        referenceAudios: [],
+        textCount: 0,
+        imageCount: 0,
+        videoCount: 0,
+        audioCount: 0,
+    });
+
+    it("repeat uses the saved snapshot and does not read the live graph", async () => {
+        let called = false;
+        const context = await loadGenerationContext({
+            intent: "repeat",
+            prompt: "旧提示",
+            sourceMetadata: {
+                prompt: "旧提示",
+                effectivePrompt: "保存的生效提示",
+                generationReferences: [{ nodeId: "text-1", kind: "text", text: "快照" }],
+            },
+            live: async () => {
+                called = true;
+                return live();
+            },
+        });
+        expect(called).toBe(false);
+        expect(context.prompt).toBe("保存的生效提示");
+        expect(context.generationReferences[0]?.nodeId).toBe("text-1");
+    });
+
+    it("repeat with an edited prompt keeps the snapshot references and the new prompt", async () => {
+        const context = await loadGenerationContext({
+            intent: "repeat",
+            prompt: "新提示",
+            sourceMetadata: {
+                prompt: "旧提示",
+                effectivePrompt: "保存的生效提示",
+                generationReferences: [{ nodeId: "text-1", kind: "text", text: "快照" }],
+            },
+            live,
+        });
+        expect(context.prompt).toBe("新提示");
+        expect(context.generationReferences).toHaveLength(1);
+    });
+
+    it("repeat without a snapshot fails instead of using current connections", async () => {
+        await expect(loadGenerationContext({ intent: "repeat", prompt: "x", sourceMetadata: { prompt: "x" }, live })).rejects.toThrow();
+    });
+
+    it("a new generation reads the live graph", async () => {
+        const context = await loadGenerationContext({
+            intent: "new",
+            prompt: "x",
+            sourceMetadata: { effectivePrompt: "old", generationReferences: [] },
+            live,
+        });
+        expect(context.prompt).toBe("live");
     });
 });
 

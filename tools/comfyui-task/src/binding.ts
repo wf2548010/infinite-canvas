@@ -1,10 +1,11 @@
 // _meta.title binding: scan workflow for nodes by title, resolve input slot, apply values.
 
+import { resolveBindingInputSlot } from "../../../web/src/services/api/comfyui-slot-probe.ts";
 import type { Workflow, WorkflowNode } from "./types.ts";
 
 /**
  * For each title category, a map from `class_type` to the input slot name.
- * If a class is not in the map, the bound node is reported as `ignored`.
+ * Unknown classes are resolved by input name. A titled node with no matching input is ignored.
  */
 export const TITLE_TO_INPUT_SLOT: Record<string, Record<string, string>> = {
     prompt: {
@@ -62,72 +63,75 @@ const REF_IMAGE_RE = /^ref_image_(0[1-9])$/;
  * (e.g. "prompt", "width", "ref_image"). Returns nodes sorted by their numeric suffix
  * for ref_*_NN; for non-numeric titles, sort by their order in the workflow.
  */
+function resolveSlot(category: string, node: WorkflowNode): string | null {
+    return resolveBindingInputSlot(category, node.class_type, node.inputs) ?? null;
+}
+
 export function findNodes(workflow: Workflow, category: keyof typeof TITLE_TO_INPUT_SLOT): FoundNode[] {
-    const slotMap = TITLE_TO_INPUT_SLOT[category];
     const matches: FoundNode[] = [];
     for (const [id, node] of Object.entries(workflow)) {
         const title = node._meta?.title;
         if (typeof title !== "string") continue;
         if (category === "prompt") {
             if (title === "prompt") {
-                const inputSlot = slotMap[node.class_type] ?? null;
+                const inputSlot = resolveSlot(category, node);
                 matches.push({
                     id,
                     class_type: node.class_type,
                     inputSlot,
                     title,
                     ignored: inputSlot === null,
-                    ignoreReason: inputSlot === null ? `class_unknown:${node.class_type}` : undefined,
+                    ignoreReason: inputSlot === null ? `input_missing:${node.class_type}` : undefined,
                 });
             }
         } else if (category === "width" || category === "height") {
             if (title === category) {
-                const inputSlot = slotMap[node.class_type] ?? null;
+                const inputSlot = resolveSlot(category, node);
                 matches.push({
                     id,
                     class_type: node.class_type,
                     inputSlot,
                     title,
                     ignored: inputSlot === null,
-                    ignoreReason: inputSlot === null ? `class_unknown:${node.class_type}` : undefined,
+                    ignoreReason: inputSlot === null ? `input_missing:${node.class_type}` : undefined,
                 });
             }
         } else if (category === "ref_image") {
             const m = REF_IMAGE_RE.exec(title);
             if (m) {
-                const inputSlot = slotMap[node.class_type] ?? null;
+                const inputSlot = resolveSlot(category, node);
                 matches.push({
                     id,
                     class_type: node.class_type,
                     inputSlot,
                     title,
                     ignored: inputSlot === null,
-                    ignoreReason: inputSlot === null ? `class_unknown:${node.class_type}` : undefined,
+                    ignoreReason: inputSlot === null ? `input_missing:${node.class_type}` : undefined,
                 });
             }
         } else if (category === "ref_video") {
             const m = REF_IMAGE_RE.exec(title.replace(/^ref_video_/, "ref_image_"));
             if (title.startsWith("ref_video_") && m) {
-                const inputSlot = slotMap[node.class_type] ?? null;
+                const inputSlot = resolveSlot(category, node);
                 matches.push({
                     id,
                     class_type: node.class_type,
                     inputSlot,
                     title,
                     ignored: inputSlot === null,
-                    ignoreReason: inputSlot === null ? `class_unknown:${node.class_type}` : undefined,
+                    ignoreReason: inputSlot === null ? `input_missing:${node.class_type}` : undefined,
                 });
             }
         } else if (category === "ref_audio") {
             if (title.startsWith("ref_audio_") && REF_IMAGE_RE.test(title.replace(/^ref_audio_/, "ref_image_"))) {
-                const inputSlot = slotMap[node.class_type] ?? null;
+                const inputSlot = resolveSlot(category, node);
                 matches.push({
                     id,
                     class_type: node.class_type,
                     inputSlot,
                     title,
                     ignored: inputSlot === null,
-                    ignoreReason: inputSlot === null ? `class_unknown:${node.class_type}` : undefined,
+                    ignoreReason: inputSlot === null ? `input_missing:${node.class_type}` : undefined,
                 });
             }
         }

@@ -14,7 +14,7 @@ import { CanvasNodeType, type CanvasNodeData, type ViewportTransform } from "@/t
 import type { CanvasNodeToolbarItem } from "@/types/canvas-plugin";
 import { ImageToolSettingsModal, type ImageToolbarSettingsTool } from "./canvas-image-toolbar-settings-modal";
 import { IMAGE_QUICK_TOOLS_STORAGE_KEY, buildImageToolbarTools, defaultImageQuickToolIds, type ImageQuickToolId } from "./canvas-image-toolbar-tools";
-import { localizeErrorDetails } from "@/lib/canvas/canvas-generation-helpers";
+import { isResumableGenerationJob, localizeErrorDetails } from "@/lib/canvas/canvas-generation-helpers";
 import { getModelProfile } from "@/services/api/models";
 import { getCanvasNodeToolbarPlacement } from "@/lib/canvas/canvas-node-toolbar-placement";
 
@@ -183,7 +183,7 @@ export function CanvasNodeHoverToolbar({
         { id: "info", title: t("canvas.nodeToolbar.infoTitle"), label: t("canvas.nodeToolbar.info"), icon: <Info className="size-4" />, onClick: () => onInfo(node) },
         { id: "delete", title: t("canvas.nodeToolbar.removeTitle"), label: t("common.delete"), icon: <Trash2 className="size-4" />, onClick: () => onDelete(node), danger: true },
     ];
-    const canResume = Boolean(node.metadata?.jobId);
+    const canResume = isResumableGenerationJob(node.metadata);
     const nodeToolbarTools: ToolbarTool[] = [
         ...(isGroup
             ? [

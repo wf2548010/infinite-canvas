@@ -10,7 +10,7 @@ const mockChannel: ModelChannel = {
     name: "Mock Channel",
     baseUrl: "http://mock-service",
     apiKey: "key",
-    apiFormat: "mock_protocol",
+    apiFormat: "mock_protocol" as ModelChannel["apiFormat"],
     models: [],
 };
 
@@ -21,9 +21,8 @@ describe("Task Registry and resumeTask Orchestrator", () => {
     });
 
     describe("Registry", () => {
-        it("returns comfyuiTaskDriver by default when protocol is not found", () => {
-            const driver = getTaskDriver("unknown_proto");
-            expect(driver.protocol).toBe("comfyui");
+        it("throws when the protocol has no registered driver", () => {
+            expect(() => getTaskDriver("unknown_proto")).toThrow(/unknown_proto/);
         });
 
         it("registers and retrieves custom driver case-insensitively", () => {

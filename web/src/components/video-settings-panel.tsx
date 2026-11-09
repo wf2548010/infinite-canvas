@@ -35,6 +35,14 @@ export const quickSecondOptions = [5, 10, 15];
 
 export const videoSecondOptions = quickSecondOptions.map((value) => String(value));
 export const videoResolutionOptions = [{ value: "720", label: "720p" }];
+export function lockVideoSizePreset(size?: string): { width: number; height: number } {
+    const raw = (size || "").trim();
+    if (!raw) return { width: 544, height: 960 };
+    const matched = videoSizeOptions.find((option) => option.value === raw);
+    if (!matched) throw new Error(`视频尺寸必须是 16:9 或 9:16 的硬件预设，当前为「${raw}」`);
+    return { width: matched.width, height: matched.height };
+}
+
 export const videoSizeOptions = MINIMAX_VIDEO_SIZE_TIERS.flatMap((tier) => [
     { value: `${tier.landscapeW}x${tier.landscapeH}`, label: `16:9 · ${tier.landscapeW}×${tier.landscapeH}`, width: tier.landscapeW, height: tier.landscapeH },
     { value: `${tier.landscapeH}x${tier.landscapeW}`, label: `9:16 · ${tier.landscapeH}×${tier.landscapeW}`, width: tier.landscapeH, height: tier.landscapeW },

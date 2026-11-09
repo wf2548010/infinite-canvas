@@ -783,7 +783,7 @@ function EmptyImageContent({ theme }: NodeContentRendererProps) {
     const { t } = useTranslation();
     return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.placeholder }}>
-            <div className="flex size-14 items-center justify-center rounded-2xl" style={{ background: theme.toolbar.activeBg }}>
+            <div className="flex size-14 items-center justify-center rounded-2xl">
                 <ImageIcon className="size-6 opacity-30" />
             </div>
             <span className="text-[10px] tracking-[0.18em] opacity-50">{t("canvas.node.emptyImage")}</span>
@@ -796,7 +796,7 @@ function VideoNodeContent({ node, theme, onViewMedia }: NodeContentRendererProps
     if (!node.metadata?.content) {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2" style={{ color: theme.node.placeholder }}>
-                <div className="flex size-12 items-center justify-center rounded-2xl bg-black/5 dark:bg-white/5">
+                <div className="flex size-12 items-center justify-center rounded-2xl">
                     <Video className="size-6 opacity-30" />
                 </div>
                 <span className="text-[10px] tracking-[0.18em] opacity-50">{t("canvas.node.emptyVideo")}</span>
@@ -974,7 +974,7 @@ function ImageSlotStatus({ image }: { image?: CanvasNodeImage }) {
                 </>
             ) : (
                 <div className="flex flex-col items-center justify-center gap-2" style={{ color: theme.node.placeholder }}>
-                    <div className="flex size-12 items-center justify-center rounded-2xl" style={{ background: theme.toolbar.activeBg }}>
+                    <div className="flex size-12 items-center justify-center rounded-2xl">
                         <ImageIcon className="size-5 opacity-30" />
                     </div>
                     <span className="text-[10px] tracking-[0.18em] opacity-50">{t("canvas.node.emptyImage")}</span>

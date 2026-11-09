@@ -1,10 +1,10 @@
 # 部署与发布指南
 
-本文档说明 infinite-canvas 项目**部署什么、部署到哪里、如何发布版本、实际的部署流程**，并附带部署结果验证方法。流程基于生产服务器（`root@114.55.54.9`，站点 `canvas.imihoo.com`）上的真实部署习惯整理。
+本文档说明 infinite-canvas 项目**部署什么、部署到哪里、如何发布版本、实际的部署流程**，并附带部署结果验证方法。示例站点为 `canvas.imihoo.com`。命令中的 `<服务器 IP>` 换成实际主机，不要把生产地址写进仓库。
 
 ## 1. 部署什么东西
 
-本项目是**纯静态前端**（Vite + React），没有任何服务端 API：
+画布应用是**静态前端**（Vite + React）。推理不经过项目服务器。多人协同是可选的 Node 服务，见第 7 节，不启用协同时不需要它：
 
 - AI 生成由浏览器**直连用户本机/局域网的 ComfyUI**（默认 `http://127.0.0.1:8188`），服务器不代理、不转发。
 - 画布、素材、生成记录、渠道凭据全部保存在浏览器本地（IndexedDB / localStorage）。
@@ -19,7 +19,7 @@
 | `plugins/` | 插件索引 |
 | `workflows/` | 内置 ComfyUI 工作流 JSON（/guide 页下载用） |
 
-服务器端不需要 Node、不需要数据库，只需要 **nginx 托管静态目录**。
+只部署静态站点时，服务器不需要数据库，用 **nginx 托管静态目录**即可。启用公网协同时才需要第 7 节的 Node 进程。
 
 ## 2. 支持的部署形态
 
@@ -57,7 +57,7 @@ git log -1 --format='%H %d'    # tag 指向当前提交（或已包含在当前�
 
 ## 4. 实际部署流程（静态 nginx 服务器）
 
-生产环境现状（`114.55.54.9`）：
+生产环境现状（`<服务器 IP>`）：
 
 - nginx 1.24（Ubuntu），多站点模式：`/etc/nginx/sites-available/<域名>` 写配置，`/etc/nginx/sites-enabled/<域名>` 软链接启用。
 - 站点目录：`/var/www/<域名>/`，属主 `www-data`。
@@ -133,7 +133,7 @@ cd web/dist
 zip -r /tmp/canvas-deploy.zip .
 
 # 3) 上传
-scp /tmp/canvas-deploy.zip root@114.55.54.9:/tmp/
+scp /tmp/canvas-deploy.zip root@<服务器 IP>:/tmp/
 ```
 
 ### 4.3 每次发版（服务器操作）
@@ -212,7 +212,7 @@ nginx -t
 
 ```
                 ┌───────────────────────────────┐
-                │   公网生产服务器 (114.55.54.9)   │
+                │   公网生产服务器 (<服务器 IP>)   │
                 │                               │
                 │  Nginx (canvas.imihoo.com)    │
                 │    ├─ location / (前端静态资源) │

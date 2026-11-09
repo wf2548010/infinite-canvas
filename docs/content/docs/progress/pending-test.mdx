@@ -7,6 +7,12 @@ description: Implemented changes that still need manual verification
 
 The current release needs manual verification in these areas:
 
+- Canvas drag, retry, and video submit:
+  - Dragging a node follows the pointer, and the position remains after refresh. In collaboration, a position-only move should not re-upload every asset.
+  - A normal execution failure retries with a new submission. Continue-polling appears only for a timeout or network interruption that still has a job id.
+  - An omni-video reference that cannot be read fails with the slot index instead of submitting fewer references.
+  - Repeating an image, text, or audio generation uses the saved prompt and references.
+  - A video size outside the 16:9 / 9:16 presets is rejected.
 - MiniMax H3 首尾帧视频生成 0 图与 2 图连线支持：
   - 画布创建视频节点，选择「MiniMax H3 首尾帧 (FP8 4步 PDMD)」或「MiniMax H3 首尾帧 (FP8 20步)」模型；
   - 在未连入任何参考图片（0 张参考图）情况下，输入提示词，验证提示词面板不再弹出「该模型至少需要 2 张参考图，当前仅连接 0 张」阻断警告，生成按钮保持可用且能正常提交生成；
