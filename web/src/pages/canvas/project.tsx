@@ -52,6 +52,7 @@ import { CanvasSidePanel } from "@/components/canvas/canvas-side-panel";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
+import { useProductionStore } from "@/stores/canvas/use-production-store";
 import { useCollabStore } from "@/stores/use-collab-store";
 import { useCanvasCollab } from "@/pages/canvas/hooks/use-canvas-collab";
 import { CanvasCollabCursors, CanvasCollabSelectionOutlines } from "@/components/canvas/canvas-collab-cursors";
@@ -1603,6 +1604,7 @@ function InfiniteCanvasPage() {
 
     const deleteCurrentProject = useCallback(() => {
         deleteProjects([projectId]);
+        useProductionStore.getState().removeProjects([projectId]);
         cleanupAssetImages();
         navigate("/canvas");
     }, [cleanupAssetImages, deleteProjects, navigate, projectId]);

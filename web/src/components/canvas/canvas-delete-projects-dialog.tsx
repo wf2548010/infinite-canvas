@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { useProductionStore } from "@/stores/canvas/use-production-store";
 import { useCanvasUiStore } from "@/stores/canvas/use-canvas-ui-store";
 
 export function CanvasDeleteProjectsDialog() {
@@ -14,6 +15,7 @@ export function CanvasDeleteProjectsDialog() {
     const cleanupImages = useAssetStore((state) => state.cleanupImages);
     const confirm = () => {
         deleteProjects(ids);
+        useProductionStore.getState().removeProjects(ids);
         cleanupImages();
         removeSelectedIds(ids);
         setDeleteIds([]);

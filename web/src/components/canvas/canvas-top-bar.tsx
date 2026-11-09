@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { BookOpen, Bot, Download, FolderOpen, Home, Images, Menu, PanelLeftClose, PanelLeftOpen, Plus, Redo2, Share2, Trash2, Undo2, Upload, Users } from "lucide-react";
 import { Button, Dropdown, Modal, Tooltip } from "antd";
 import { useTranslation } from "react-i18next";
@@ -58,6 +59,8 @@ export function CanvasTopBar({
     compactAgentStatus: { connected: boolean; enabled: boolean; activity: string };
     onToggleAgent: () => void;
 }) {
+    const { id: projectId } = useParams();
+    const navigate = useNavigate();
     const colorTheme = useThemeStore((state) => state.theme);
     const { t } = useTranslation();
     const theme = canvasThemes[colorTheme];
@@ -145,6 +148,11 @@ export function CanvasTopBar({
                             </button>
                         )}
                     </div>
+                    {projectId ? (
+                        <button type="button" className="rounded-md px-2 py-1 text-sm transition hover:bg-black/5 dark:hover:bg-white/10" style={{ color: theme.node.text }} onClick={() => navigate(`/canvas/${projectId}/production`)}>
+                            {t("canvas.production.open")}
+                        </button>
+                    ) : null}
                     <CompactAgentStatus status={compactAgentStatus} onClick={onToggleAgent} />
                 </div>
 
