@@ -115,6 +115,9 @@ function configNodeOp(id: string, input: Record<string, unknown>, x: number, y: 
             audioFormat: input.audioFormat,
             audioSpeed: input.audioSpeed,
             audioInstructions: input.audioInstructions,
+            productionRole: input.assetKind,
+            productionCode: input.assetCode,
+            productionName: input.assetName,
         }),
     };
 }

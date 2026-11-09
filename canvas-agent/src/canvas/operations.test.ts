@@ -35,6 +35,14 @@ test("canvas_generate_audio creates an audio generation flow with run_generation
     assert.equal(runs[0].mode, "audio");
 });
 
+test("canvas_generate_image keeps the production asset code on the config node", () => {
+    const ops = opsOf("canvas_generate_image", { prompt: "林夏", assetKind: "character", assetCode: "CHR-001", assetName: "林夏", autoRun: true });
+    const config = ops.find((op) => op.type === "add_node" && op.nodeType === "config");
+    assert.equal(config?.metadata?.productionRole, "character");
+    assert.equal(config?.metadata?.productionCode, "CHR-001");
+    assert.equal(config?.metadata?.productionName, "林夏");
+});
+
 test("canvas_generate_image still produces run_generation", () => {
     const ops = opsOf("canvas_generate_image", { prompt: "a dog", autoRun: true });
     assert.ok(ops.some((op) => op.type === "run_generation"));

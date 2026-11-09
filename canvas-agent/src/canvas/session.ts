@@ -36,6 +36,7 @@ const SITE_TOOLS = new Set<ToolName>([
     "prompts_search",
     "assets_list",
     "assets_add",
+    "production_save",
     "generation_get_status",
 ]);
 

@@ -94,6 +94,7 @@ function ScriptPane({ projectId, doc }: { projectId: string; doc: ProductionDoc 
     const saveScript = useProductionStore((state) => state.saveScript);
     return (
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
+            <p className="text-xs opacity-50">{doc.script.code}</p>
             <Field label={t("canvas.production.scriptTitle")} value={doc.script.title} onChange={(title) => saveScript(projectId, { title })} />
             <Field label={t("canvas.production.scriptBody")} value={doc.script.content} placeholder={t("canvas.production.scriptPlaceholder")} multiline onChange={(content) => saveScript(projectId, { content })} />
         </div>
@@ -127,6 +128,7 @@ function PicturePane({ projectId, kind, doc, onError }: { projectId: string; kin
             <AddCard label={t(kind === "character" ? "canvas.production.addCharacter" : "canvas.production.addScene")} onClick={() => (kind === "character" ? createCharacter(projectId) : createScene(projectId))} />
             {items.map((item) => (
                 <article key={item.id} className="flex flex-col gap-3 rounded-xl border border-black/10 p-3 dark:border-white/10">
+                    <p className="text-xs opacity-50">{item.code}</p>
                     <div className={kind === "character" ? "aspect-[3/4] overflow-hidden rounded-lg" : "aspect-video overflow-hidden rounded-lg"}>
                         <StoredImage storageKey={item.imageKey} alt={item.name} />
                     </div>
@@ -164,7 +166,7 @@ function ShotPane({ projectId, doc, onError }: { projectId: string; doc: Product
             {doc.shots.map((shot, index) => (
                 <article key={shot.id} className="flex flex-col gap-3 rounded-xl border border-black/10 p-3 dark:border-white/10">
                     <div className="flex items-center justify-between gap-2 text-xs opacity-60">
-                        <span>{index + 1}</span>
+                        <span>{shot.code || index + 1}</span>
                         <span className="flex gap-2">
                             <TextButton label={t("canvas.production.moveUp")} onClick={() => reorderShot(projectId, shot.id, -1)} />
                             <TextButton label={t("canvas.production.moveDown")} onClick={() => reorderShot(projectId, shot.id, 1)} />
@@ -223,6 +225,7 @@ function MediaCard({ item, bucket, onChange, onDelete, onCollect }: { item: Prod
     const { t } = useTranslation();
     return (
         <article className="flex flex-col gap-3 rounded-xl border border-black/10 p-3 dark:border-white/10">
+            <p className="text-xs opacity-50">{item.code}</p>
             <StoredMedia storageKey={item.storageKey} mimeType={item.mimeType || (bucket === "audios" ? "audio/mpeg" : "video/mp4")} />
             <Field label={t("canvas.production.name")} value={item.title} onChange={(title) => onChange({ title })} />
             <Field label={t("canvas.production.note")} value={item.note} onChange={(note) => onChange({ note })} />

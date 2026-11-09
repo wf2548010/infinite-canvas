@@ -7,8 +7,11 @@ import {
     addMedia,
     addScene,
     addShot,
+    backfillProductionCodes,
     collectFinalFromClip,
     createProduction,
+    ingestAgentAssets,
+    issueProductionCode,
     moveShot,
     removeCharacter,
     removeMedia,
@@ -19,6 +22,7 @@ import {
     updateScene,
     updateScript,
     updateShot,
+    type AgentProductionInput,
     type ProductionDoc,
     type ProductionMedia,
 } from "@/lib/canvas/production";
@@ -40,10 +44,12 @@ type ProductionStore = {
     saveShot: (projectId: string, id: string, patch: Parameters<typeof updateShot>[2]) => void;
     deleteShot: (projectId: string, id: string) => void;
     reorderShot: (projectId: string, id: string, direction: -1 | 1) => void;
-    createMedia: (projectId: string, bucket: "audios" | "clips" | "finals", media: Omit<ProductionMedia, "id" | "updatedAt">) => string;
+    createMedia: (projectId: string, bucket: "audios" | "clips" | "finals", media: Omit<ProductionMedia, "id" | "updatedAt" | "code">) => string;
     saveMedia: (projectId: string, bucket: "audios" | "clips" | "finals", id: string, patch: Partial<Omit<ProductionMedia, "id">>) => void;
     deleteMedia: (projectId: string, bucket: "audios" | "clips" | "finals", id: string) => void;
     collectFinal: (projectId: string, clipId: string) => string | undefined;
+    ingest: (projectId: string, items: AgentProductionInput[]) => { code: string; kind: AgentProductionInput["kind"] }[];
+    replaceDoc: (projectId: string, doc: ProductionDoc) => void;
 };
 
 const STORAGE_KEY = "infinite-canvas:production_store";
@@ -57,7 +63,10 @@ const storage: PersistStorage<ProductionStore> = {
     getItem: async (name) => {
         const value = await localForageStorage.getItem(name);
         if (!value) return null;
-        return JSON.parse(value) as StorageValue<ProductionStore>;
+        const parsed = JSON.parse(value) as StorageValue<ProductionStore>;
+        const docs = parsed.state.docs || {};
+        parsed.state.docs = Object.fromEntries(Object.entries(docs).map(([projectId, doc]) => [projectId, backfillProductionCodes(doc)]));
+        return parsed;
     },
     setItem: (name, value) => localForageStorage.setItem(name, JSON.stringify(value)),
     removeItem: (name) => localForageStorage.removeItem(name),
@@ -85,7 +94,7 @@ export const useProductionStore = create<ProductionStore>()(
             createCharacter: (projectId) => {
                 const id = nanoid();
                 const now = new Date().toISOString();
-                set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => addCharacter(doc, { id, name: "", summary: "", updatedAt: now })) }));
+                set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => { const issued = issueProductionCode(doc, "CHR"); return addCharacter(issued.doc, { id, code: issued.code, name: "", summary: "", updatedAt: now }); }) }));
                 return id;
             },
             saveCharacter: (projectId, id, patch) => set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => updateCharacter(doc, id, patch)) })),
@@ -93,7 +102,7 @@ export const useProductionStore = create<ProductionStore>()(
             createScene: (projectId) => {
                 const id = nanoid();
                 const now = new Date().toISOString();
-                set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => addScene(doc, { id, name: "", summary: "", updatedAt: now })) }));
+                set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => { const issued = issueProductionCode(doc, "SCN"); return addScene(issued.doc, { id, code: issued.code, name: "", summary: "", updatedAt: now }); }) }));
                 return id;
             },
             saveScene: (projectId, id, patch) => set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => updateScene(doc, id, patch)) })),
@@ -101,7 +110,7 @@ export const useProductionStore = create<ProductionStore>()(
             createShot: (projectId) => {
                 const id = nanoid();
                 const now = new Date().toISOString();
-                set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => addShot(doc, { id, title: "", prompt: "", characterIds: [], updatedAt: now })) }));
+                set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => { const issued = issueProductionCode(doc, "SHT"); return addShot(issued.doc, { id, code: issued.code, title: "", prompt: "", characterIds: [], updatedAt: now }); }) }));
                 return id;
             },
             saveShot: (projectId, id, patch) => set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => updateShot(doc, id, patch)) })),
@@ -110,11 +119,18 @@ export const useProductionStore = create<ProductionStore>()(
             createMedia: (projectId, bucket, media) => {
                 const id = nanoid();
                 const now = new Date().toISOString();
-                set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => addMedia(doc, bucket, { ...media, id, updatedAt: now })) }));
+                set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => { const issued = issueProductionCode(doc, bucket === "audios" ? "AUD" : bucket === "clips" ? "CLP" : "FIN"); return addMedia(issued.doc, bucket, { ...media, id, code: issued.code, updatedAt: now }); }) }));
                 return id;
             },
             saveMedia: (projectId, bucket, id, patch) => set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => updateMedia(doc, bucket, id, patch)) })),
             deleteMedia: (projectId, bucket, id) => set((state) => ({ docs: withDoc(state.docs, projectId, (doc) => removeMedia(doc, bucket, id)) })),
+            ingest: (projectId, items) => {
+                const current = get().docs[projectId] ?? createProduction(projectId);
+                const saved = ingestAgentAssets(current, items);
+                if (saved.doc !== current) set((state) => ({ docs: { ...state.docs, [projectId]: saved.doc } }));
+                return saved.records;
+            },
+            replaceDoc: (projectId, doc) => set((state) => (state.docs[projectId] === doc ? state : { docs: { ...state.docs, [projectId]: doc } })),
             collectFinal: (projectId, clipId) => {
                 const id = nanoid();
                 const before = get().docs[projectId]?.finals.length ?? 0;
