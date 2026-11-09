@@ -143,13 +143,24 @@ it.each([CanvasNodeType.Image, CanvasNodeType.Text])("keeps an entirely failed %
     expect(container.textContent).toContain(secondReason);
 });
 
-it.each([CanvasNodeType.Image, CanvasNodeType.Text])("uses the first failed %s slot's accepted job for the retry caption", async (type) => {
+function retryActionLabel() {
+    return container.querySelector('section[role="alert"] button')?.textContent?.replace(/\s+/g, "") ?? "";
+}
+
+it.each([CanvasNodeType.Image, CanvasNodeType.Text])("uses the first failed %s slot's resumable job for the retry caption", async (type) => {
+    const metadata: CanvasNodeMetadata = type === CanvasNodeType.Image
+        ? { images: [image("ok", "blob:successful", "success"), { ...image("bad", "", "error"), jobId: "accepted-slot", jobResumable: true }] }
+        : { texts: [{ id: "ok", content: "成功的文本", status: "success" }, { id: "bad", content: "", status: "error", errorDetails: reason, jobId: "accepted-slot", jobResumable: true }] };
+    await render(node(type, { ...metadata, status: "success" }), { onRetry: vi.fn() });
+    expect(retryActionLabel()).toBe("继续查询");
+});
+
+it.each([CanvasNodeType.Image, CanvasNodeType.Text])("does not resume a failed %s slot that only kept a job id", async (type) => {
     const metadata: CanvasNodeMetadata = type === CanvasNodeType.Image
         ? { images: [image("ok", "blob:successful", "success"), { ...image("bad", "", "error"), jobId: "accepted-slot" }] }
         : { texts: [{ id: "ok", content: "成功的文本", status: "success" }, { id: "bad", content: "", status: "error", errorDetails: reason, jobId: "accepted-slot" }] };
     await render(node(type, { ...metadata, status: "success" }), { onRetry: vi.fn() });
-    expect(container.textContent).toContain("继续查询");
-    expect(container.textContent).not.toContain("重试");
+    expect(retryActionLabel()).toBe("重试");
 });
 
 it("does not label a failed slot as resumable using a different root job id", async () => {
@@ -158,10 +169,14 @@ it("does not label a failed slot as resumable using a different root job id", as
     expect(container.textContent).not.toContain("继续查询");
 });
 
-it("labels an accepted task action as continuing the query", async () => {
+it("labels a timeout task action as continuing the query", async () => {
+    await render(node(CanvasNodeType.Video, { status: "error", errorDetails: reason, jobId: "accepted-job", isTimeout: true }), { onRetry: vi.fn() });
+    expect(retryActionLabel()).toBe("继续查询");
+});
+
+it("does not continue a query when a failed task only kept a job id", async () => {
     await render(node(CanvasNodeType.Video, { status: "error", errorDetails: reason, jobId: "accepted-job" }), { onRetry: vi.fn() });
-    expect(container.textContent).toContain("继续查询");
-    expect(container.textContent).not.toContain("重试");
+    expect(retryActionLabel()).toBe("重试");
 });
 
 it("keeps the single-image loading indicator visible before submission settles", async () => {
