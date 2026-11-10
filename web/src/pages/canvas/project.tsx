@@ -44,7 +44,6 @@ import { CanvasAlignmentGuides } from "@/components/canvas/canvas-alignment-guid
 import { CanvasMultiSelectionOverlay } from "@/components/canvas/canvas-multi-selection-overlay";
 import { calculateAlignmentSnap, type AlignmentGuideLine } from "@/lib/canvas/canvas-alignment-snapping";
 import { isPositionOnlyGraphChange, planCanvasGraphSync } from "@/lib/canvas/canvas-graph-sync";
-import { createProduction, productionNodeStamp, syncProductionFromNodes } from "@/lib/canvas/production";
 import { connectionTouchesRect, nodeIntersectsRect } from "@/lib/canvas/canvas-viewport-cull";
 import { CanvasNodePromptPanel, type CanvasNodeGenerationMode } from "@/components/canvas/canvas-node-prompt-panel";
 import { CanvasToolbar } from "@/components/canvas/canvas-toolbar";
@@ -53,7 +52,6 @@ import { CanvasSidePanel } from "@/components/canvas/canvas-side-panel";
 import { CanvasZoomControls } from "@/components/canvas/canvas-zoom-controls";
 import { useAgentStore } from "@/stores/use-agent-store";
 import { useCanvasStore, type CanvasProject } from "@/stores/canvas/use-canvas-store";
-import { useProductionStore } from "@/stores/canvas/use-production-store";
 import { useCollabStore } from "@/stores/use-collab-store";
 import { useCanvasCollab } from "@/pages/canvas/hooks/use-canvas-collab";
 import { CanvasCollabCursors, CanvasCollabSelectionOutlines } from "@/components/canvas/canvas-collab-cursors";
@@ -668,18 +666,6 @@ function InfiniteCanvasPage() {
         if (plan.collab === "position-patch") broadcastNodesPatch(nodes, connections, { uploadAssets: false });
         else if (plan.collab === "full") broadcastCanvasSync(nodes, connections, currentProject?.title);
     }, [activeChatId, activeRoomId, backgroundMode, broadcastCanvasSync, broadcastNodesPatch, chatSessions, collabRole, connections, currentProject?.title, nodes, projectId, projectLoaded, showImageInfo, updateProject]);
-
-    useEffect(() => {
-        if (!projectLoaded) return;
-        const current = useProductionStore.getState().docs[projectId] ?? createProduction(projectId);
-        const synced = syncProductionFromNodes(current, nodes);
-        if (synced.doc !== current) useProductionStore.getState().replaceDoc(projectId, synced.doc);
-        if (!synced.patches.length) return;
-        setNodes((prev) => prev.map((node) => {
-            const patch = synced.patches.find((item) => item.id === node.id);
-            return patch ? { ...node, metadata: { ...node.metadata, productionCode: patch.code } } : node;
-        }));
-    }, [nodes, projectId, projectLoaded]);
 
     useEffect(() => {
         if (!dialogNodeId) setNodeImageSettingsOpen(false);
@@ -1617,7 +1603,6 @@ function InfiniteCanvasPage() {
 
     const deleteCurrentProject = useCallback(() => {
         deleteProjects([projectId]);
-        useProductionStore.getState().removeProjects([projectId]);
         cleanupAssetImages();
         navigate("/canvas");
     }, [cleanupAssetImages, deleteProjects, navigate, projectId]);
@@ -3478,7 +3463,6 @@ function InfiniteCanvasPage() {
                             ...generationMetadata,
                             generationMode: mode,
                             generationReferences,
-                            ...productionNodeStamp(sourceNode?.metadata),
                             generationOriginNodeId: sourceNode?.metadata?.generationOriginNodeId || nodeId,
                         },
                     };
@@ -3683,7 +3667,6 @@ function InfiniteCanvasPage() {
                             references: generationReferenceUrls(generationContext),
                             generationMode: mode,
                             generationReferences: generationContext.generationReferences,
-                            ...productionNodeStamp(sourceNode?.metadata),
                             generationOriginNodeId: sourceNode?.metadata?.generationOriginNodeId || nodeId,
                             seed: nextSeed,
                             images: undefined,
@@ -3798,7 +3781,6 @@ function InfiniteCanvasPage() {
                             status: NODE_STATUS_LOADING,
                             generationMode: mode,
                             generationReferences: generationContext.generationReferences,
-                            ...productionNodeStamp(sourceNode?.metadata),
                             generationOriginNodeId: sourceNode?.metadata?.generationOriginNodeId || nodeId,
                             ...buildAudioGenerationMetadata(generationConfig),
                             images: undefined,
@@ -3904,7 +3886,6 @@ function InfiniteCanvasPage() {
                         reasoningEffort: generationConfig.reasoningEffort,
                         generationMode: mode,
                         generationReferences: generationContext.generationReferences,
-                        ...productionNodeStamp(sourceNode?.metadata),
                         generationOriginNodeId: sourceNode?.metadata?.generationOriginNodeId || nodeId,
                         textCount,
                         seed: nextSeed,

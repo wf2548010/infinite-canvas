@@ -5,7 +5,6 @@ import UserLayout from "@/layouts/user-layout";
 import AssetsPage from "@/pages/assets";
 import CanvasPage from "@/pages/canvas";
 import CanvasProjectPage from "@/pages/canvas/project";
-import CanvasProductionPage from "@/pages/canvas/production";
 import CommunityPage from "@/pages/community";
 import CommunityStudioPage from "@/pages/community/studio";
 import ConfigPage from "@/pages/config";
@@ -37,7 +36,6 @@ export const router = createBrowserRouter([
             { path: "/prompts", element: <PromptsPage /> },
             { path: "/canvas", element: <CanvasPage /> },
             { path: "/canvas/:id", element: <CanvasProjectPage /> },
-            { path: "/canvas/:id/production", element: <CanvasProductionPage /> },
             { path: "/config", element: <ConfigPage /> },
             { path: "/guide", element: <GuidePage /> },
             { path: "/pricing", element: <PricingPage /> },

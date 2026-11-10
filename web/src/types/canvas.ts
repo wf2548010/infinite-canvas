@@ -74,9 +74,6 @@ export type CanvasNodeMetadata = {
     effectivePrompt?: string;
     generationReferences?: CanvasGenerationReferenceSnapshot[];
     generationOriginNodeId?: string;
-    productionRole?: "script" | "character" | "scene" | "shot" | "audio" | "clip" | "final";
-    productionCode?: string;
-    productionName?: string;
     jobId?: string;
     queuePosition?: number;
     networkRetryText?: string;

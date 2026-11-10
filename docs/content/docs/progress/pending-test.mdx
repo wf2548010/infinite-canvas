@@ -7,13 +7,6 @@ description: Implemented changes that still need manual verification
 
 The current release needs manual verification in these areas:
 
-- Canvas production board:
-  - Open a canvas and click Production beside the title. The board stays on the same project and shows Script, Characters, Scenes, Shots, Audio, Clips, and Finals.
-  - Save a script, character, scene, and shot, then refresh. The entries remain. Deleting a character, scene, audio item, or clip keeps the shot and clears only that reference.
-  - Saving a clip as a final keeps the clip and plays the same file. Deleting the canvas removes the board.
-  - Every script, character, scene, shot, audio item, clip, and final shows a unique code. A code is not reused after its asset is deleted.
-  - When the agent saves a script or a character and generates an image with that code, the finished image appears on the same production entry.
-  - The script reads as a page, characters and scenes are fixed-ratio posters, shots are a left-image list, and audio, clips, and finals are rows. Cards should not stretch into tall empty forms.
 - Canvas drag, retry, and video submit:
   - Dragging a node follows the pointer, and the position remains after refresh. In collaboration, a position-only move should not re-upload every asset.
   - A normal execution failure retries with a new submission. Continue-polling appears only for a timeout or network interruption that still has a job id.

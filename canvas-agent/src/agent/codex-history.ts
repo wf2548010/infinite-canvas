@@ -735,7 +735,6 @@ function toolName(name: string) {
     if (name === "prompts_search") return "搜索提示词";
     if (name === "assets_list") return "资产列表";
     if (name === "assets_add") return "添加资产";
-    if (name === "production_save") return "保存制作目录";
     if (name === "generation_get_status") return "生成任务状态";
     return name ? `调用工具：${name}` : "工具操作";
 }

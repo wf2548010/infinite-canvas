@@ -6,9 +6,7 @@ import { uploadImage } from "@/services/image-storage";
 import { imageAspectOptions, imageQualityOptions } from "@/components/image-settings-panel";
 import { videoResolutionOptions, videoSecondOptions, videoSizeOptions } from "@/components/video-settings-panel";
 import type { CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
-import type { AgentProductionInput, ProductionKind } from "@/lib/canvas/production";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
-import { useProductionStore } from "@/stores/canvas/use-production-store";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { modelOptionLabel, modelOptionName, normalizeModelOptionValue, selectableModelsByCapability, useConfigStore } from "@/stores/use-config-store";
 import { useWorkbenchAgentStore } from "@/stores/use-workbench-agent-store";
@@ -26,7 +24,6 @@ export const SITE_TOOL_NAMES = [
     "prompts_search",
     "assets_list",
     "assets_add",
-    "production_save",
 ] as const;
 
 export type SiteToolName = (typeof SITE_TOOL_NAMES)[number];
@@ -49,7 +46,6 @@ export const SITE_TOOL_LABELS: Record<SiteToolName, string> = {
     get prompts_search() { return siteText("promptSearch"); },
     get assets_list() { return siteText("assetList"); },
     get assets_add() { return siteText("assetAdd"); },
-    get production_save() { return siteText("productionSave"); },
 };
 
 type SiteToolInput = Record<string, unknown>;
@@ -77,8 +73,6 @@ export async function runSiteTool(name: SiteToolName, input: SiteToolInput, navi
             return listAssets(input);
         case "assets_add":
             return addAsset(input);
-        case "production_save":
-            return saveProduction(input, context.canvasSnapshot?.projectId);
         default:
             throw new Error(siteText("unknownTool", { name }));
     }
@@ -314,27 +308,6 @@ async function addAsset(input: SiteToolInput) {
         return { ok: true, id, kind: "image" };
     }
     throw new Error(siteText("assetKindUnsupported"));
-}
-
-const PRODUCTION_KINDS = new Set<ProductionKind>(["script", "character", "scene", "shot", "audio", "clip", "final"]);
-
-function saveProduction(input: SiteToolInput, currentProjectId?: string) {
-    const projectId = typeof input.projectId === "string" && input.projectId.trim() ? input.projectId.trim() : currentProjectId;
-    if (!projectId) throw new Error(siteText("productionProjectRequired"));
-    if (!useCanvasStore.getState().projects.some((project) => project.id === projectId)) throw new Error(siteText("productionProjectMissing"));
-    const items = (Array.isArray(input.items) ? input.items : []).map(normalizeProductionItem).filter((item): item is AgentProductionInput => Boolean(item));
-    if (!items.length) throw new Error(siteText("productionItemsRequired"));
-    const assets = useProductionStore.getState().ingest(projectId, items);
-    return { ok: true, projectId, assets };
-}
-
-function normalizeProductionItem(value: unknown): AgentProductionInput | null {
-    if (!value || typeof value !== "object") return null;
-    const item = value as Record<string, unknown>;
-    if (typeof item.kind !== "string" || !PRODUCTION_KINDS.has(item.kind as ProductionKind)) return null;
-    const text = (key: string) => (typeof item[key] === "string" ? item[key] : undefined);
-    const codes = Array.isArray(item.characterCodes) ? item.characterCodes.filter((code): code is string => typeof code === "string") : undefined;
-    return { kind: item.kind as ProductionKind, code: text("code"), title: text("title"), name: text("name"), content: text("content"), summary: text("summary"), prompt: text("prompt"), note: text("note"), imageKey: text("imageKey"), storageKey: text("storageKey"), mimeType: text("mimeType"), characterCodes: codes, sceneCode: text("sceneCode"), audioCode: text("audioCode"), clipCode: text("clipCode") };
 }
 
 function paginate(input: SiteToolInput, total: number, defaultSize: number) {
