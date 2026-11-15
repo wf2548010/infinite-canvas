@@ -1295,8 +1295,8 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
                         <div className="hidden text-base font-semibold leading-5 @min-[560px]:block">
                             {agentProvider === "cursor" ? "Cursor" : "WorkBuddy"}
                         </div>
-                        <Button size="small" type={agentProvider === "workbuddy" ? "default" : "text"} onClick={() => selectProvider("workbuddy")}>WorkBuddy</Button>
-                        <Button size="small" type={agentProvider === "cursor" ? "default" : "text"} onClick={() => selectProvider("cursor")}>Cursor</Button>
+                        <Button size="small" type={agentProvider === "workbuddy" ? "default" : "text"} onClick={() => selectProvider("workbuddy")}>{t("agent.connect.providerWorkbuddy")}</Button>
+                        <Button size="small" type={agentProvider === "cursor" ? "default" : "text"} onClick={() => selectProvider("cursor")}>{t("agent.connect.providerCursor")}</Button>
                         <Tooltip title={t("agent.panel.connectionSettings", { status: connectionStatus })} placement="bottom">
                             <Button size="small" type="text" className="!h-8 !w-8 !min-w-8 !px-0 @min-[560px]:!w-auto @min-[560px]:!min-w-0 @min-[560px]:!px-[7px]" aria-label={t("agent.panel.connectionSettingsLabel", { status: connectionStatus })} icon={<PlugZap className="size-3.5" style={{ color: connectionStatusColor }} />} onClick={() => setAgentState({ activeTab: "setup" })}>
                                 <span className="hidden @min-[560px]:inline">{connectionStatus}</span>
