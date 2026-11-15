@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import i18n from "@/i18n";
+import { AGENT_PROVIDER_STORAGE_KEY, readAgentProvider } from "@/components/agent/agent-run-state";
 
 import type { CanvasAgentOp, CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -38,7 +39,7 @@ export type AgentConversationState = {
     error?: string;
 };
 export type AgentPanelTab = "chat" | "setup" | "history" | "skills" | "log";
-export type AgentProvider = "workbuddy" | "codex";
+export type AgentProvider = "workbuddy" | "cursor";
 
 const CONNECT_TIMEOUT_MS = 6000;
 let agentSource: EventSource | null = null;
@@ -137,7 +138,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     connectError: "",
     pendingTool: null,
     pendingApprovals: [],
-    agentProvider: "workbuddy",
+    agentProvider: typeof window === "undefined" ? "workbuddy" : readAgentProvider(localStorage.getItem(AGENT_PROVIDER_STORAGE_KEY)),
     workbuddyOnline: false,
     workbuddyConfigured: false,
     setAgentState: (patch) => set(patch),

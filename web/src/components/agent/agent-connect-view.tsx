@@ -30,6 +30,7 @@ export function AgentConnectView({
     onUrlChange,
     onTokenChange,
     onToggleEnabled,
+    section = "all",
 }: {
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     url: string;
@@ -41,6 +42,7 @@ export function AgentConnectView({
     onUrlChange: (value: string) => void;
     onTokenChange: (value: string) => void;
     onToggleEnabled: () => void;
+    section?: "all" | "cursor";
 }) {
     const { t, i18n } = useTranslation();
     const { message } = App.useApp();
@@ -111,6 +113,8 @@ export function AgentConnectView({
     return (
         <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
             <div className="space-y-4">
+                {section === "all" ? (
+                    <>
                 <div>
                     <div className="text-base font-semibold leading-6">{t("agent.connect.title")}</div>
                     <div className="mt-1 text-xs leading-5" style={{ color: theme.node.muted }}>
@@ -245,6 +249,9 @@ export function AgentConnectView({
                         提示：在 WorkBuddy 连接器中心安装 Infinite Canvas 连接器后，亦可自动按需启动。
                     </div>
                 </div>
+
+                    </>
+                ) : null}
 
                 {/* 4. Cursor MCP 配置引导 */}
                 <div className="rounded-lg border p-3.5" style={{ borderColor: theme.node.stroke }}>

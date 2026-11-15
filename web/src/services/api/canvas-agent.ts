@@ -153,6 +153,10 @@ export function runWorkbuddyTurn(endpoint: string, token: string, body: { prompt
     return fetchAgentJson<{ ok?: boolean }>(endpoint, token, "/agent/workbuddy/turn", jsonPost(body));
 }
 
+export function interruptWorkbuddyTurn(endpoint: string, token: string) {
+    return fetchAgentJson<{ ok?: boolean }>(endpoint, token, "/agent/workbuddy/interrupt", jsonPost({}));
+}
+
 export function replyWorkbuddyPermission(endpoint: string, token: string, body: { requestId: string; answers: Record<string, unknown> }) {
     return fetchAgentJson<{ ok?: boolean }>(endpoint, token, "/agent/workbuddy/permission", jsonPost(body));
 }
