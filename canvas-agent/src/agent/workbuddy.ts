@@ -2,7 +2,38 @@ import crypto from "node:crypto";
 
 import { getWorkbuddyConfig, loadConfig, saveConfig, type CanvasAgentConfig, type WorkbuddyConfig } from "../config.js";
 import { logger } from "../utils/logger.js";
+import {
+    shouldFinishWorkbuddyPoll,
+    visibleWorkbuddyMessages,
+    workbuddyPermissionRequestId,
+    type WorkbuddyPollMessage,
+} from "./workbuddy-poll.js";
 import type { AgentEmit } from "./types.js";
+
+const repliedPermissionIds = new Set<string>();
+const announcedPermissionIds = new Set<string>();
+
+export function resetWorkbuddyTurnState() {
+    repliedPermissionIds.clear();
+    announcedPermissionIds.clear();
+}
+
+export function acknowledgeWorkbuddyPermission(requestId: string) {
+    if (requestId) repliedPermissionIds.add(requestId);
+}
+
+function toPollMessage(message: WorkbuddyMessage): WorkbuddyPollMessage {
+    return {
+        messageId: message.message_id,
+        role: message.role,
+        msgType: message.msg_type,
+        text: (message.content || []).join("\n"),
+        requestId: workbuddyPermissionRequestId({
+            messageId: message.message_id,
+            metadata: message.metadata as { requestId?: string } | undefined,
+        }),
+    };
+}
 
 type WorkbuddyMessage = {
     message_id: string;
@@ -65,16 +96,32 @@ export function updateWorkbuddyConfig(patch: Partial<WorkbuddyConfig>) {
 }
 
 /** 执行一次 WorkBuddy 本地助理对话任务。 */
-export async function runWorkbuddyTurn(prompt: string, emit: AgentEmit, options: { threadId?: string; sourceClientId?: string } = {}) {
+export async function runWorkbuddyTurn(
+    prompt: string,
+    emit: AgentEmit,
+    options: {
+        threadId?: string;
+        sourceClientId?: string;
+        turnId?: string;
+        signal?: AbortSignal;
+        intervalMs?: number;
+        maxPolls?: number;
+        accessToken?: string;
+        baseUrl?: string;
+    } = {},
+) {
     const config = loadConfig(true);
-    const { accessToken, baseUrl } = getWorkbuddyConfig(config);
+    const accessToken = options.accessToken || getWorkbuddyConfig(config).accessToken;
+    const baseUrl = options.baseUrl || getWorkbuddyConfig(config).baseUrl;
     const threadId = options.threadId || config.workspace?.activeThreadId || "workbuddy-session";
-    const turnId = `wb-turn-${crypto.randomUUID().slice(0, 8)}`;
+    const turnId = options.turnId || `wb-turn-${crypto.randomUUID().slice(0, 8)}`;
 
     if (!accessToken) {
         emit("agent_error", { message: "请先在 Agent 设置中配置 WorkBuddy Access Token。" });
         return;
     }
+
+    resetWorkbuddyTurnState();
 
     emit("agent_event", {
         agent: "workbuddy",
@@ -85,7 +132,6 @@ export async function runWorkbuddyTurn(prompt: string, emit: AgentEmit, options:
     });
 
     try {
-        // 1. 发送消息到本地助理
         const sendRes = await fetch(`${baseUrl}/openapi/v2/localassistant/message`, {
             method: "POST",
             headers: {
@@ -108,83 +154,98 @@ export async function runWorkbuddyTurn(prompt: string, emit: AgentEmit, options:
         const initialMessageId = sendBody.data.message_id;
         logger.info("WorkBuddy message sent", { messageId: initialMessageId, threadId, turnId });
 
-        // 2. 轮询本地助理的回复消息
-        const maxPollCount = 120; // 120 * 1.5s = 最长等待 3 分钟
-        let completed = false;
+        const intervalMs = options.intervalMs ?? 1500;
+        const maxPolls = options.maxPolls ?? 120;
+        let previous: WorkbuddyPollMessage[] = [];
+        let latestText = new Map<string, string>();
+        let finished = false;
 
-        for (let i = 0; i < maxPollCount; i++) {
-            await new Promise((r) => setTimeout(r, 1500));
+        for (let i = 0; i < maxPolls; i++) {
+            if (options.signal?.aborted) break;
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+            if (options.signal?.aborted) break;
 
-            const pollRes = await fetch(`${baseUrl}/openapi/v2/localassistant/message?message_id=${encodeURIComponent(initialMessageId)}`, {
-                method: "GET",
-                headers: {
-                    Authorization: `Bearer ${accessToken}`,
-                    Accept: "application/json",
-                },
-                signal: AbortSignal.timeout(5000),
-            });
+            let pollBody: WorkbuddyMessagesResponse;
+            try {
+                const pollRes = await fetch(
+                    `${baseUrl}/openapi/v2/localassistant/message?message_id=${encodeURIComponent(initialMessageId)}`,
+                    {
+                        method: "GET",
+                        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+                        signal: AbortSignal.timeout(5000),
+                    },
+                );
+                pollBody = (await pollRes.json()) as WorkbuddyMessagesResponse;
+            } catch (pollError) {
+                if (pollError instanceof Error && pollError.name === "AbortError") {
+                    emit("agent_event", { agent: "workbuddy", type: "turn.completed", threadId, turnId });
+                    emit("agent_done", { agent: "workbuddy", code: 0 });
+                    return;
+                }
+                throw pollError;
+            }
 
-            const pollBody = (await pollRes.json()) as WorkbuddyMessagesResponse;
-            if (pollBody.code === 0 && pollBody.data?.messages?.length) {
-                const assistantMessages = pollBody.data.messages.filter((m) => m.role === "assistant");
-                if (assistantMessages.length > 0) {
-                    for (const msg of assistantMessages) {
-                        const replyText = (msg.content || []).join("\n");
-                        const itemId = msg.message_id || `wb-msg-${crypto.randomUUID().slice(0, 8)}`;
-
+            const raw = pollBody.code === 0 ? pollBody.data?.messages || [] : [];
+            const visible = visibleWorkbuddyMessages(raw.map(toPollMessage), repliedPermissionIds);
+            for (const message of visible) {
+                if (message.msgType === "permission" || message.msgType === "permission_request") {
+                    if (!announcedPermissionIds.has(message.requestId)) {
+                        announcedPermissionIds.add(message.requestId);
                         emit("agent_event", {
                             agent: "workbuddy",
-                            type: "item.completed",
+                            type: "permission.requested",
                             threadId,
                             turnId,
-                            item: {
-                                id: itemId,
-                                type: "agent_message",
-                                text: replyText,
-                            },
-                        });
-
-                        emit("chat_message", {
-                            threadId,
-                            turnId,
-                            message: {
-                                id: itemId,
-                                role: "assistant",
-                                title: "WorkBuddy",
-                                text: replyText,
-                                threadId,
-                                turnId,
-                            },
+                            requestId: message.requestId,
+                            text: message.text,
                         });
                     }
-                    completed = true;
-                    break;
+                    continue;
                 }
+                if (message.role !== "assistant" || message.msgType !== "text") continue;
+                if (latestText.get(message.messageId) === message.text) continue;
+                latestText.set(message.messageId, message.text);
+                emit("agent_event", {
+                    agent: "workbuddy",
+                    type: "item.updated",
+                    threadId,
+                    turnId,
+                    item: { id: message.messageId, type: "agent_message", text: message.text },
+                });
             }
+            if (shouldFinishWorkbuddyPoll(previous, visible)) {
+                finished = true;
+                for (const message of visible.filter((item) => item.role === "assistant" && item.msgType === "text")) {
+                    emit("agent_event", {
+                        agent: "workbuddy",
+                        type: "item.completed",
+                        threadId,
+                        turnId,
+                        item: { id: message.messageId, type: "agent_message", text: message.text },
+                    });
+                }
+                break;
+            }
+            previous = visible;
         }
 
-        if (!completed) {
+        if (!finished && !options.signal?.aborted) {
             emit("agent_event", {
                 agent: "workbuddy",
                 type: "item.completed",
                 threadId,
                 turnId,
-                item: {
-                    id: `wb-timeout-${turnId}`,
-                    type: "agent_message",
-                    text: "WorkBuddy 助理回复等待超时，请在桌面端 WorkBuddy 客户端中确认任务执行状态。",
-                },
+                item: { id: `wb-timeout-${turnId}`, type: "agent_message", text: "WorkBuddy 回复超时" },
             });
         }
-
-        emit("agent_event", {
-            agent: "workbuddy",
-            type: "turn.completed",
-            threadId,
-            turnId,
-        });
+        emit("agent_event", { agent: "workbuddy", type: "turn.completed", threadId, turnId });
         emit("agent_done", { agent: "workbuddy", code: 0 });
     } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+            emit("agent_event", { agent: "workbuddy", type: "turn.completed", threadId, turnId });
+            emit("agent_done", { agent: "workbuddy", code: 0 });
+            return;
+        }
         const text = error instanceof Error ? error.message : String(error);
         logger.error("WorkBuddy turn execution failed", { error: text });
         emit("agent_error", { message: text });
