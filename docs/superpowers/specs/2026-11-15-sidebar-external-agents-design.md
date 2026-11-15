@@ -2,7 +2,7 @@
 
 日期：2026-11-15  
 分支：`pre/1.1.0`  
-状态：待用户审阅规格后进入实现计划
+状态：已确认。实现计划见 `docs/superpowers/plans/2026-11-15-sidebar-external-agents.md`
 
 ## 背景与目标
 
