@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canSendAgentPrompt, nextAgentRunState, readAgentProvider, sseErrorDisposition } from "./agent-run-state";
+import { acceptsSidebarAgentEvent, canSendAgentPrompt, nextAgentRunState, readAgentProvider, sseErrorDisposition } from "./agent-run-state";
 
 describe("agent run state", () => {
     it("lets a connected WorkBuddy sidebar send while Codex is still preparing", () => {
@@ -21,6 +21,13 @@ describe("agent run state", () => {
 
     it("clears waiting after completion or error", () => {
         expect(nextAgentRunState()).toEqual({ waiting: false, sending: false });
+    });
+
+    it("accepts WorkBuddy events without a saved Codex thread but still filters Codex threads", () => {
+        expect(acceptsSidebarAgentEvent({ agent: "workbuddy", threadId: "workbuddy-session" }, "")).toBe(true);
+        expect(acceptsSidebarAgentEvent({ agent: "codex", threadId: "other" }, "thread-1")).toBe(false);
+        expect(acceptsSidebarAgentEvent({ threadId: "" }, "")).toBe(false);
+        expect(acceptsSidebarAgentEvent({ thread_id: "thread-1" }, "thread-1")).toBe(true);
     });
 
     it("keeps an established SSE connection open", () => {

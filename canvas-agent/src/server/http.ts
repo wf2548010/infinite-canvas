@@ -432,6 +432,7 @@ export function startHttpServer() {
         res.json({ ok: true });
     });
     app.post("/agent/workbuddy/turn", route(async (req, res) => {
+        if (!getWorkbuddyConfig(loadConfig(true)).accessToken) return res.status(400).json({ ok: false, error: "请先在 Agent 设置中配置 WorkBuddy Access Token。" });
         const run = beginWorkbuddyHttpRun();
         if (!run.ok) return res.status(409).json(run);
         const threadId = req.body?.threadId ? String(req.body.threadId) : undefined;

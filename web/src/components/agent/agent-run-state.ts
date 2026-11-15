@@ -14,6 +14,12 @@ export function nextAgentRunState() {
     return { waiting: false as const, sending: false as const };
 }
 
+export function acceptsSidebarAgentEvent(event: { agent?: string; threadId?: string; thread_id?: string }, activeThreadId: string) {
+    if (event.agent === "workbuddy") return true;
+    const threadId = event.threadId || event.thread_id || "";
+    return !!threadId && threadId === activeThreadId;
+}
+
 export function sseErrorDisposition(wasConnected: boolean): "reconnect" | "close" {
     return wasConnected ? "reconnect" : "close";
 }

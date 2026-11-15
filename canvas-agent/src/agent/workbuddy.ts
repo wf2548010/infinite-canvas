@@ -128,7 +128,7 @@ export async function runWorkbuddyTurn(
     const turnId = options.turnId || `wb-turn-${crypto.randomUUID().slice(0, 8)}`;
 
     if (!accessToken) {
-        emit("agent_error", { message: "请先在 Agent 设置中配置 WorkBuddy Access Token。" });
+        emit("agent_error", { agent: "workbuddy", threadId, turnId, message: "请先在 Agent 设置中配置 WorkBuddy Access Token。" });
         return;
     }
 
@@ -279,7 +279,7 @@ export async function runWorkbuddyTurn(
         }
         const text = error instanceof Error ? error.message : String(error);
         logger.error("WorkBuddy turn execution failed", { error: text });
-        emit("agent_error", { message: text });
+        emit("agent_error", { agent: "workbuddy", threadId, turnId, message: text });
         emit("agent_event", {
             agent: "workbuddy",
             type: "turn.completed",

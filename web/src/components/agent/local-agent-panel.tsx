@@ -64,7 +64,7 @@ import {
 } from "./agent-event-formatters";
 import { AgentLogView } from "./agent-log-view";
 import { AgentPanelTabs } from "./agent-panel-tabs";
-import { AGENT_PROVIDER_STORAGE_KEY, canSendAgentPrompt, nextAgentRunState, sseErrorDisposition } from "./agent-run-state";
+import { acceptsSidebarAgentEvent, AGENT_PROVIDER_STORAGE_KEY, canSendAgentPrompt, nextAgentRunState, sseErrorDisposition } from "./agent-run-state";
 import { AgentSkillsView } from "./agent-skills-view";
 
 const MAX_ATTACHMENTS = 6;
@@ -387,7 +387,9 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
                 : current.messages.filter((item) => !isConnectionErrorMessage(item));
             errorLoggedRef.current = false;
             connectedRef.current = true;
+            pendingToolRef.current = null;
             setAgentState({
+                pendingTool: null,
                 connected: true,
                 activity: pendingApprovals.length ? rt("awaitingApproval") : busy ? rt("codexRunning") : rt("connected"),
                 waiting: busy,
@@ -453,7 +455,7 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
         source.addEventListener("agent_event", (event) => {
             const data = parseEventData<AgentEventPayload>(event);
             if (data) enqueueEvent(() => {
-                if (!isCurrentThreadEvent(data)) return;
+                if (!acceptsSidebarAgentEvent(data, useAgentStore.getState().activeThreadId)) return;
                 const shouldProcess = registerLiveAgentTurn(data, authoritativeHistoryTurnsRef.current, liveTurnKeysRef.current);
                 if (data.type !== "usage.updated" && !shouldProcess) return;
                 return handleAgentEvent(data);
@@ -531,7 +533,7 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
             const data = parseEventData<AgentEventPayload>(event);
             if (!data) return;
             enqueueEvent(() => {
-                if (!isCurrentThreadEvent(data)) return;
+                if (!acceptsSidebarAgentEvent(data, useAgentStore.getState().activeThreadId)) return;
                 if (!registerLiveAgentTurn(data, authoritativeHistoryTurnsRef.current, liveTurnKeysRef.current)) return;
                 showAgentError(data.message, data, !data.replayed);
             });
@@ -634,7 +636,7 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
         loadThreadsSequenceRef.current += 1;
         const currentBeforeSend = useAgentStore.getState();
         const requestThreadId = currentBeforeSend.activeThreadId;
-        setAgentState({ prompt: "", attachments: [], canvasReferences: [], activity: rt("sending"), sending: true, loadingThreads: false, activeTurnId: "", messages: currentBeforeSend.messages });
+        setAgentState({ prompt: "", attachments: [], canvasReferences: [], activity: rt("sending"), sending: true, waiting: true, loadingThreads: false, activeTurnId: "", messages: currentBeforeSend.messages });
         addMessage({ id: messageId, itemId: "synthetic:user", clientMessageId: messageId, threadId: requestThreadId, turnId: "", role: "user", text: userText, attachments: files, canvasReferences: messageReferences, skill: messageSkill });
         let threadId = requestThreadId;
         try {
@@ -648,7 +650,7 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
             const effortName = reasoningEffort ? i18n.t(`agent.composer.effort.${reasoningEffort}`) : rt("defaultEffort");
             addEventLog(rt("sendTask"), `${modelName} · ${effortName}${selectedSkill ? ` · Skill ${selectedSkill.name}` : ""}${files.length ? ` · ${rt("attachmentCount", { count: files.length })}` : ""}${canvasReferences.length ? ` · ${rt("canvasReferenceCount", { count: canvasReferences.length })}` : ""} · ${compactText(text) || rt(canvasReferences.length ? "canvasReferencesOnly" : "attachmentsOnly")}`);
             await runWorkbuddyTurn(endpoint, token, { prompt: requestPrompt, threadId, clientId: clientIdRef.current });
-            setAgentState({ sending: false, waiting: true, activity: "等待 WorkBuddy 桌面助理回复..." });
+            setAgentState({ sending: false, activity: "等待 WorkBuddy 桌面助理回复..." });
             files.forEach((item) => {
                 URL.revokeObjectURL(item.url);
                 attachmentUrlsRef.current.delete(item.url);
@@ -656,7 +658,7 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
         } catch (error) {
             const text = error instanceof Error ? error.message : rt("sendFailed");
             const response = error instanceof AgentApiError ? error.response as { code?: string; state?: AgentConversationState } : undefined;
-            if (response?.code === "WORKBUDDY_BUSY") setAgentState({ waiting: true, sending: false });
+            setAgentState({ waiting: response?.code === "WORKBUDDY_BUSY", sending: false });
             if (response?.state) applyConversationState(response.state);
             const stale = response?.code === "CONVERSATION_STALE";
             const busy = response?.code === "CONVERSATION_BUSY" || response?.code === "WORKBUDDY_BUSY" || text.includes("正在运行");
@@ -691,6 +693,10 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
             setAgentState(nextAgentRunState());
             addEventLog(rt("stopTask"), rt("taskStopped"));
         } catch (error) {
+            if (error instanceof AgentApiError && error.status === 409) {
+                setAgentState(nextAgentRunState());
+                return;
+            }
             setAgentState({ activity: rt("stopFailed") });
             addEventLog(rt("stopFailed"), error);
         }
@@ -1275,7 +1281,9 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
             await replyWorkbuddyPermission(endpoint, token, { requestId: pendingPermission.requestId, answers: { allow: true } });
             setPendingPermission(null);
         } catch (error) {
+            await interruptWorkbuddyTurn(endpoint, token).catch(() => undefined);
             setAgentState(nextAgentRunState());
+            setPendingPermission(null);
             addMessage({ role: "error", title: rt("sendFailed"), text: error instanceof Error ? error.message : rt("sendFailed") });
         }
     };
@@ -1361,8 +1369,8 @@ export function LocalAgentPanel({ embedded, headless, autoConnect }: { embedded?
                         <div className="mx-3 mb-2 rounded-lg border p-3 text-xs leading-5" style={{ borderColor: theme.node.stroke, color: theme.node.text }}>
                             <div className="whitespace-pre-wrap break-words">{pendingPermission.text}</div>
                             <div className="mt-2 flex gap-2">
-                                <Button size="small" type="primary" onClick={() => void confirmPermission()}>确认</Button>
-                                <Button size="small" onClick={() => void stopTurn()}>取消</Button>
+                                <Button size="small" type="primary" onClick={() => void confirmPermission()}>{t("common.confirm")}</Button>
+                                <Button size="small" onClick={() => { setPendingPermission(null); void stopTurn(); }}>{t("common.cancel")}</Button>
                             </div>
                         </div>
                     ) : null}
