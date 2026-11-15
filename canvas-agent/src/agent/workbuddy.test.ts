@@ -43,10 +43,21 @@ test("a WorkBuddy turn updates once, waits through permission, then completes", 
 test("aborting a WorkBuddy turn completes it", async () => {
     resetWorkbuddyTurnState();
     const events: string[] = [];
+    let polls = 0;
     const controller = new AbortController();
     const original = globalThis.fetch;
     globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
         if (init?.method === "POST") return new Response(JSON.stringify({ code: 0, data: { message_id: "user-2" } }), { status: 200 });
+        polls += 1;
+        if (polls === 1) {
+            return new Response(
+                JSON.stringify({
+                    code: 0,
+                    data: { messages: [{ message_id: "a2", role: "assistant", msg_type: "text", content: ["partial reply"], metadata: {} }] },
+                }),
+                { status: 200 },
+            );
+        }
         controller.abort();
         return new Response(JSON.stringify({ code: 0, data: { messages: [] } }), { status: 200 });
     }) as typeof fetch;
@@ -59,6 +70,8 @@ test("aborting a WorkBuddy turn completes it", async () => {
         globalThis.fetch = original;
         resetWorkbuddyTurnState();
     }
+    assert.equal(events.includes("item.updated"), true);
+    assert.equal(events.includes("item.completed"), true);
     assert.equal(events.includes("turn.completed"), true);
     assert.equal(events.includes("agent_error"), false);
 });

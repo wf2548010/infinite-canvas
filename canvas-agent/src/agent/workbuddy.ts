@@ -22,6 +22,17 @@ export function acknowledgeWorkbuddyPermission(requestId: string) {
     if (requestId) repliedPermissionIds.add(requestId);
 }
 
+function combineAbortSignals(userSignal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    if (!userSignal) return timeoutSignal;
+    if (typeof AbortSignal.any === "function") return AbortSignal.any([userSignal, timeoutSignal]);
+    return timeoutSignal;
+}
+
+function isPollFetchFailure(error: unknown) {
+    return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+}
+
 function toPollMessage(message: WorkbuddyMessage): WorkbuddyPollMessage {
     return {
         messageId: message.message_id,
@@ -131,6 +142,26 @@ export async function runWorkbuddyTurn(
         sourceClientId: options.sourceClientId,
     });
 
+    const intervalMs = options.intervalMs ?? 1500;
+    const maxPolls = options.maxPolls ?? 120;
+    let previous: WorkbuddyPollMessage[] = [];
+    const latestText = new Map<string, string>();
+    let finished = false;
+
+    const completeAbortedTurn = () => {
+        for (const [messageId, text] of latestText) {
+            emit("agent_event", {
+                agent: "workbuddy",
+                type: "item.completed",
+                threadId,
+                turnId,
+                item: { id: messageId, type: "agent_message", text },
+            });
+        }
+        emit("agent_event", { agent: "workbuddy", type: "turn.completed", threadId, turnId });
+        emit("agent_done", { agent: "workbuddy", code: 0 });
+    };
+
     try {
         const sendRes = await fetch(`${baseUrl}/openapi/v2/localassistant/message`, {
             method: "POST",
@@ -143,7 +174,7 @@ export async function runWorkbuddyTurn(
                 content: prompt,
                 msg_type: "text",
             }),
-            signal: AbortSignal.timeout(10000),
+            signal: combineAbortSignals(options.signal, 10000),
         });
 
         const sendBody = (await sendRes.json()) as WorkbuddySendMessageResponse;
@@ -153,12 +184,6 @@ export async function runWorkbuddyTurn(
 
         const initialMessageId = sendBody.data.message_id;
         logger.info("WorkBuddy message sent", { messageId: initialMessageId, threadId, turnId });
-
-        const intervalMs = options.intervalMs ?? 1500;
-        const maxPolls = options.maxPolls ?? 120;
-        let previous: WorkbuddyPollMessage[] = [];
-        let latestText = new Map<string, string>();
-        let finished = false;
 
         for (let i = 0; i < maxPolls; i++) {
             if (options.signal?.aborted) break;
@@ -172,15 +197,17 @@ export async function runWorkbuddyTurn(
                     {
                         method: "GET",
                         headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-                        signal: AbortSignal.timeout(5000),
+                        signal: combineAbortSignals(options.signal, 5000),
                     },
                 );
                 pollBody = (await pollRes.json()) as WorkbuddyMessagesResponse;
             } catch (pollError) {
-                if (pollError instanceof Error && pollError.name === "AbortError") {
-                    emit("agent_event", { agent: "workbuddy", type: "turn.completed", threadId, turnId });
-                    emit("agent_done", { agent: "workbuddy", code: 0 });
-                    return;
+                if (isPollFetchFailure(pollError)) {
+                    if (options.signal?.aborted) {
+                        completeAbortedTurn();
+                        return;
+                    }
+                    continue;
                 }
                 throw pollError;
             }
@@ -229,7 +256,12 @@ export async function runWorkbuddyTurn(
             previous = visible;
         }
 
-        if (!finished && !options.signal?.aborted) {
+        if (options.signal?.aborted) {
+            completeAbortedTurn();
+            return;
+        }
+
+        if (!finished) {
             emit("agent_event", {
                 agent: "workbuddy",
                 type: "item.completed",
@@ -241,9 +273,8 @@ export async function runWorkbuddyTurn(
         emit("agent_event", { agent: "workbuddy", type: "turn.completed", threadId, turnId });
         emit("agent_done", { agent: "workbuddy", code: 0 });
     } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-            emit("agent_event", { agent: "workbuddy", type: "turn.completed", threadId, turnId });
-            emit("agent_done", { agent: "workbuddy", code: 0 });
+        if (isPollFetchFailure(error) && options.signal?.aborted) {
+            completeAbortedTurn();
             return;
         }
         const text = error instanceof Error ? error.message : String(error);
