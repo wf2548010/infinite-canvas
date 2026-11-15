@@ -28,10 +28,14 @@ function registerCanvasTool(server: McpServer, config: CanvasAgentConfig, name: 
     });
 }
 
+export function canvasAgentHealthUrl(baseUrl: string) {
+    return `${baseUrl.replace(/\/$/, "")}/health`;
+}
+
 /** 检查本地 Canvas Agent HTTP 服务是否存活。 */
 async function isServerAlive(url: string) {
     try {
-        const res = await fetch(`${url}/api/session`, { method: "GET", signal: AbortSignal.timeout(1000) });
+        const res = await fetch(canvasAgentHealthUrl(url), { method: "GET", signal: AbortSignal.timeout(1000) });
         return res.ok;
     } catch {
         return false;
