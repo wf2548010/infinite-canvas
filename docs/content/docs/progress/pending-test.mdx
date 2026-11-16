@@ -7,6 +7,10 @@ description: Implemented changes that still need manual verification
 
 The current release needs manual verification in these areas:
 
+- Video generation progress:
+  - Start a video job that stays in the ComfyUI queue, then one that is sampling. The node should show 「排队中 (第 N 位)」 while waiting, then 「生成中 (当前步/总步)」 while ComfyUI reports sampler progress, and return to 「生成中」 only when no step is available.
+  - Disconnect ComfyUI briefly during the run. The node should show the reconnect text, then resume the queue position or sampling step after the connection returns.
+  - A finished or failed video node should not keep the last sampling step.
 - Canvas drag, retry, and video submit:
   - Dragging a node follows the pointer, and the position remains after refresh. In collaboration, a position-only move should not re-upload every asset.
   - A normal execution failure retries with a new submission. Continue-polling appears only for a timeout or network interruption that still has a job id.

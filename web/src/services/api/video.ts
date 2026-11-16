@@ -17,7 +17,7 @@ export type VideoRequestOptions = {
     workflowId?: string;
     seed?: number;
     jobId?: string;
-    onProgress?: (status: string, detail?: { jobId?: string }) => void;
+    onProgress?: (status: string, detail?: { jobId?: string; queuePosition?: number; message?: string; progressPct?: number; value?: number; max?: number }) => void;
 };
 
 export type VideoGenerationResult = { blob?: Blob; url?: string; mimeType?: string };

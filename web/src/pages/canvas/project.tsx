@@ -3710,15 +3710,7 @@ function InfiniteCanvasPage() {
                                 referenceVideos: generationContext.referenceVideos,
                                 referenceAudios: generationContext.referenceAudios,
                                 seed: nextSeed,
-                                onProgress: (status, detail) => {
-                                    if (status === "submitted" && detail?.jobId) {
-                                        setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, jobId: detail.jobId } } : node)));
-                                    } else if (status === "pending" && typeof detail?.queuePosition === "number") {
-                                        setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, queuePosition: detail.queuePosition } } : node)));
-                                    } else if (status === "running") {
-                                        setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, metadata: { ...node.metadata, queuePosition: undefined } } : node)));
-                                    }
-                                },
+                                onProgress: (status, detail) => setNodes((prev) => updateNodeGenerationProgress(prev, videoId, status, detail)),
                             }),
                         );
                         const videoSize = fitNodeSize(video.width || spec.width, video.height || spec.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
@@ -3747,6 +3739,11 @@ function InfiniteCanvasPage() {
                                               watermark: generationConfig.videoWatermark,
                                               references: generationReferenceUrls(generationContext),
                                               seed: nextSeed,
+                                              queuePosition: undefined,
+                                              networkRetryText: undefined,
+                                              progressPct: undefined,
+                                              progressValue: undefined,
+                                              progressMax: undefined,
                                           },
                                       }
                                     : node,
@@ -4159,6 +4156,11 @@ function InfiniteCanvasPage() {
                                   status: imageId ? (item.metadata?.status === "error" ? NODE_STATUS_LOADING : item.metadata?.status) : NODE_STATUS_LOADING,
                                   errorDetails: undefined,
                                   ...(isResume ? { jobId: resumeJobId } : { jobId: undefined }),
+                                  queuePosition: undefined,
+                                  networkRetryText: undefined,
+                                  progressPct: undefined,
+                                  progressValue: undefined,
+                                  progressMax: undefined,
                                   isTimeout: undefined,
                                   images: item.metadata?.images?.map((image) =>
                                       image.id === imageId
@@ -4238,6 +4240,11 @@ function InfiniteCanvasPage() {
                                           status: NODE_STATUS_SUCCESS,
                                           errorDetails: undefined,
                                           jobId: undefined,
+                                          queuePosition: undefined,
+                                          networkRetryText: undefined,
+                                          progressPct: undefined,
+                                          progressValue: undefined,
+                                          progressMax: undefined,
                                           isTimeout: undefined,
                                       },
                                   }

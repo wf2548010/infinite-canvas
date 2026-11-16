@@ -13,6 +13,7 @@ import {
     getWorkflowForModelProfile,
 } from "./comfyui-default-workflows";
 import { resolveBindingInputSlot } from "./comfyui-slot-probe";
+import { watchComfyuiJobProgress } from "./comfyui-progress";
 import { lockVideoSizePreset } from "@/components/video-settings-panel";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
@@ -841,10 +842,9 @@ export function translateComfyuiValidationError(errMsg: string): string {
     return errMsg;
 }
 
-async function submitJobInternal(workflow: ComfyuiWorkflowJson, baseUrl: string, token?: string): Promise<string> {
+async function submitJobInternal(workflow: ComfyuiWorkflowJson, baseUrl: string, token?: string, clientId = nanoid()): Promise<string> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
-    const clientId = nanoid();
     const url = `${normalizeBaseUrl(baseUrl)}/prompt`;
     const request = { url, method: "POST" };
     const response = await comfyuiFetch(url, {
@@ -894,21 +894,21 @@ function workflowHasYoloPaths(workflow: ComfyuiWorkflowJson): boolean {
  * Submit a bound workflow to ComfyUI's /prompt endpoint; returns prompt_id as jobId.
  * 适配检测器路径；仅在 HTTP 400 明确拒绝任务且提供等价路径选项时修正后重试一次。
  */
-export async function submitJob(workflow: ComfyuiWorkflowJson, baseUrl: string, token?: string): Promise<string> {
+export async function submitJob(workflow: ComfyuiWorkflowJson, baseUrl: string, token?: string, clientId?: string): Promise<string> {
     if (!workflow || typeof workflow !== "object" || Object.keys(workflow).length === 0) {
         throw new ComfyuiNoWorkflowError("工作流拓扑为空，请检查当前渠道工作流配置或重新选择有效的工作流");
     }
 
     // 1. 若工作流包含 segm/bbox 路径，探测主机操作系统并自适应转换路径
     if (!workflowHasYoloPaths(workflow)) {
-        return await submitJobInternal(workflow, baseUrl, token);
+        return await submitJobInternal(workflow, baseUrl, token, clientId);
     }
 
     const targetOs = await detectComfyuiHostOs(baseUrl, token);
     const adaptedWorkflow = adaptWorkflowModelPaths(workflow, targetOs);
 
     try {
-        return await submitJobInternal(adaptedWorkflow, baseUrl, token);
+        return await submitJobInternal(adaptedWorkflow, baseUrl, token, clientId);
     } catch (error) {
         if (!(error instanceof ComfyuiApiError) || error.status !== 400 || !error.nodeErrors) throw error;
         const corrected = structuredClone(adaptedWorkflow);
@@ -928,7 +928,7 @@ export async function submitJob(workflow: ComfyuiWorkflowJson, baseUrl: string, 
                 }
             }
         }
-        if (changed) return await submitJobInternal(corrected, baseUrl, token);
+        if (changed) return await submitJobInternal(corrected, baseUrl, token, clientId);
         throw error;
     }
 }
@@ -3064,7 +3064,8 @@ export interface ComfyuiVideoRequest {
     seed?: number;
     signal?: AbortSignal;
     jobId?: string;
-    onProgress?: (status: string, detail?: { jobId?: string }) => void;
+    clientId?: string;
+    onProgress?: (status: string, detail?: { jobId?: string; queuePosition?: number; message?: string; progressPct?: number; value?: number; max?: number }) => void;
 }
 
 export function validateVideoToolInputs(category: "faceRefine" | "depthVideo", input: {
@@ -3270,7 +3271,7 @@ export async function submitComfyuiVideoJob(req: ComfyuiVideoRequest): Promise<{
                   duration,
               });
 
-        const jobId = await submitJob(boundWorkflow, baseUrl, token);
+        const jobId = await submitJob(boundWorkflow, baseUrl, token, req.clientId);
         return { jobId, baseUrl, token };
     } catch (error) {
         throw addComfyuiChannelContext(error, channel.name);
@@ -3302,9 +3303,18 @@ export async function requestComfyuiVideo(req: ComfyuiVideoRequest): Promise<{ u
     const token = channel.comfyuiProxyToken;
 
     let jobId = req.jobId;
+    let stopProgress = () => {};
     try {
         if (!jobId) {
-            const submitted = await submitComfyuiVideoJob({ ...req, model: rawModel });
+            const clientId = nanoid();
+            stopProgress = watchComfyuiJobProgress({
+                baseUrl,
+                token,
+                clientId,
+                signal: req.signal,
+                onProgress: req.onProgress,
+            });
+            const submitted = await submitComfyuiVideoJob({ ...req, model: rawModel, clientId });
             jobId = submitted.jobId;
             req.onProgress?.("submitted", { jobId });
         }
@@ -3336,6 +3346,8 @@ export async function requestComfyuiVideo(req: ComfyuiVideoRequest): Promise<{ u
             throw new ComfyuiTimeoutError(error.timeoutMs, jobId);
         }
         throw addComfyuiChannelContext(error, channel.name);
+    } finally {
+        stopProgress();
     }
 }
 
