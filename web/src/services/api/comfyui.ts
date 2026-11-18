@@ -681,21 +681,34 @@ function addComfyuiChannelContext(error: unknown, channelName: string): unknown 
     return contextualError;
 }
 
+function combineAbortSignals(signals: AbortSignal[]): AbortSignal {
+    const controller = new AbortController();
+    for (const signal of signals) {
+        if (signal.aborted) {
+            controller.abort();
+            return controller.signal;
+        }
+        signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+    return controller.signal;
+}
+
 async function comfyuiFetch(url: string, init?: RequestInit, baseUrl = url): Promise<Response> {
+    const timeoutController = new AbortController();
+    const timer = setTimeout(() => timeoutController.abort(), COMFYUI_FETCH_TIMEOUT_MS);
+    const signal = init?.signal ? combineAbortSignals([init.signal, timeoutController.signal]) : timeoutController.signal;
     try {
-        return await fetch(url, init);
+        return await fetch(url, { ...init, signal });
     } catch (error) {
         if (error instanceof ComfyuiError) {
             throw error;
         }
-        if (
-            init?.signal?.aborted ||
-            (error instanceof Error && error.name === "AbortError") ||
-            (typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError")
-        ) {
+        if (init?.signal?.aborted) {
             throw error;
         }
         throw new ComfyuiNetworkError(baseUrl, undefined, error, { url, method: init?.method });
+    } finally {
+        clearTimeout(timer);
     }
 }
 
@@ -932,6 +945,9 @@ export async function submitJob(workflow: ComfyuiWorkflowJson, baseUrl: string, 
         throw error;
     }
 }
+
+/** A single ComfyUI request must not sit open forever. Status polls and downloads retry or fail instead of leaving the canvas on “生成中”. */
+export const COMFYUI_FETCH_TIMEOUT_MS = 60_000;
 
 /** How often the job status is polled when running tasks exist (2 seconds). */
 export const JOB_POLL_INTERVAL_RUNNING_MS = 2_000;
@@ -1447,13 +1463,20 @@ export class ComfyuiJobBatchPoller {
     }
 
     private async loop() {
-        while (this.isRunning && this.jobs.size > 0) {
-            await this.tick();
-            if (!this.isRunning || this.jobs.size === 0) break;
-            const interval = this.hasRunningJobs ? JOB_POLL_INTERVAL_RUNNING_MS : JOB_POLL_INTERVAL_PENDING_MS;
-            await new Promise((resolve) => setTimeout(resolve, interval));
+        try {
+            while (this.isRunning && this.jobs.size > 0) {
+                try {
+                    await this.tick();
+                } catch {
+                    // 单次 /queue 解析失败不能停掉轮询，否则服务端已经完成的视频会一直停在画布的「生成中」。
+                }
+                if (!this.isRunning || this.jobs.size === 0) break;
+                const interval = this.hasRunningJobs ? JOB_POLL_INTERVAL_RUNNING_MS : JOB_POLL_INTERVAL_PENDING_MS;
+                await new Promise((resolve) => setTimeout(resolve, interval));
+            }
+        } finally {
+            this.isRunning = false;
         }
-        this.isRunning = false;
     }
 
     private async tick() {
@@ -3093,6 +3116,9 @@ function resolveVideoRequestChannel(req: ComfyuiVideoRequest, rawModel: string):
 }
 
 export async function submitComfyuiVideoJob(req: ComfyuiVideoRequest): Promise<{ jobId: string; baseUrl: string; token?: string }> {
+    if (/@\[node:[^\]]+\]/.test(req.prompt || "")) {
+        throw new ComfyuiError("提示词里还有未展开的节点引用，生成已停止。请确认引用的文本节点有内容后再试。");
+    }
     const rawModel = req.model || req.config.videoModel || req.config.model;
     const channel = resolveVideoRequestChannel(req, rawModel);
     const requestModel = modelOptionName(rawModel);

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import i18n from "@/i18n";
-import { adaptWorkflowModelPaths, applyBindings, cancelJob, collectVideoAssetIds, ComfyuiAbortedError, ComfyuiApiError, ComfyuiJobCancelledError, ComfyuiJobError, ComfyuiJobLostError, ComfyuiJobNotFoundError, ComfyuiNetworkError, ComfyuiNoWorkflowError, ComfyuiTimeoutError, downloadAsset, generateRandomSeed, parseSize, pollComfyuiVideoJob, pollJob, pollJobRaw, queryComfyuiJobStatus, requestComfyuiImage, resetComfyuiBatchPollers, submitComfyuiVideoJob, submitJob, validateComfyuiWorkflow } from "@/services/api/comfyui";
+import { adaptWorkflowModelPaths, applyBindings, cancelJob, collectVideoAssetIds, COMFYUI_FETCH_TIMEOUT_MS, ComfyuiAbortedError, ComfyuiApiError, ComfyuiJobCancelledError, ComfyuiJobError, ComfyuiJobLostError, ComfyuiJobNotFoundError, ComfyuiNetworkError, ComfyuiNoWorkflowError, ComfyuiTimeoutError, downloadAsset, generateRandomSeed, JOB_POLL_INTERVAL_PENDING_MS, parseSize, pollComfyuiVideoJob, pollJob, pollJobRaw, queryComfyuiJobStatus, requestComfyuiImage, resetComfyuiBatchPollers, submitComfyuiVideoJob, submitJob, validateComfyuiWorkflow } from "@/services/api/comfyui";
 import type { ComfyuiWorkflowJson } from "@/services/api/comfyui";
 import { defaultConfig, findWorkflow, type AiConfig, type ModelChannel } from "@/stores/use-config-store";
 import { DEFAULT_BUILTIN_COMFYUI_DEPTH_VIDEO_WORKFLOW, DEFAULT_BUILTIN_COMFYUI_FACE_REFINE_WORKFLOW, DEFAULT_LOCAL_COMFYUI_T2I_WORKFLOW } from "@/services/api/comfyui-default-workflows";
@@ -461,6 +461,99 @@ describe("pollJob", () => {
         expect(res).toBeDefined();
         expect(onProgress).toHaveBeenCalledWith("network_retry", expect.objectContaining({ retryCount: 1 }));
         expect(onProgress).toHaveBeenCalledWith("network_retry", expect.objectContaining({ retryCount: 2 }));
+    });
+
+    it("keeps polling after a corrupt queue response and resolves the finished video job", async () => {
+        vi.useFakeTimers();
+        let queueCalls = 0;
+        fetchMock.mockImplementation(async (url: string) => {
+            if (url.includes("/queue")) {
+                queueCalls += 1;
+                if (queueCalls === 1) {
+                    return { ok: true, status: 200, json: async () => { throw new SyntaxError("Unexpected token"); } };
+                }
+                return { ok: true, status: 200, json: async () => ({ queue_running: [], queue_pending: [] }) };
+            }
+            if (url.includes("/history/job_done")) {
+                return {
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        job_done: {
+                            status: { status_str: "success", completed: true },
+                            outputs: { "1": { images: [{ filename: "MiniMax_H3_00004_.mp4", subfolder: "video", type: "output" }] } },
+                        },
+                    }),
+                };
+            }
+            return { ok: true, status: 200, json: async () => ({}) };
+        });
+
+        const promise = pollJobRaw("job_done", "http://127.0.0.1:8188");
+        const settled = promise.then(
+            (value) => ({ settled: true as const, value }),
+            (error: unknown) => ({ settled: true as const, error }),
+        );
+        await vi.advanceTimersByTimeAsync(50);
+        await vi.advanceTimersByTimeAsync(JOB_POLL_INTERVAL_PENDING_MS);
+        const result = await Promise.race([
+            settled,
+            vi.advanceTimersByTimeAsync(0).then(() => ({ settled: false as const })),
+        ]);
+        expect(result.settled).toBe(true);
+        if (result.settled && "value" in result) {
+            expect(result.value?.outputs?.[0]?.filename).toBe("MiniMax_H3_00004_.mp4");
+        }
+    });
+
+    it("aborts a stalled queue request and still resolves the finished video job", async () => {
+        vi.useFakeTimers();
+        let queueCalls = 0;
+        fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+            if (url.includes("/queue")) {
+                queueCalls += 1;
+                if (queueCalls === 1) {
+                    return new Promise((_resolve, reject) => {
+                        const abort = () => {
+                            const error = new Error("The operation was aborted");
+                            error.name = "AbortError";
+                            reject(error);
+                        };
+                        if (init?.signal?.aborted) abort();
+                        else init?.signal?.addEventListener("abort", abort, { once: true });
+                    });
+                }
+                return Promise.resolve({ ok: true, status: 200, json: async () => ({ queue_running: [], queue_pending: [] }) });
+            }
+            if (url.includes("/history/job_stall")) {
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        job_stall: {
+                            status: { status_str: "success", completed: true },
+                            outputs: { "1": { images: [{ filename: "MiniMax_H3_00004_.mp4", subfolder: "video", type: "output" }] } },
+                        },
+                    }),
+                });
+            }
+            return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+        });
+
+        const promise = pollJobRaw("job_stall", "http://127.0.0.1:8188");
+        const settled = promise.then(
+            (value) => ({ settled: true as const, value }),
+            (error: unknown) => ({ settled: true as const, error }),
+        );
+        await vi.advanceTimersByTimeAsync(COMFYUI_FETCH_TIMEOUT_MS + JOB_POLL_INTERVAL_PENDING_MS);
+        const result = await Promise.race([
+            settled,
+            Promise.resolve().then(() => ({ settled: false as const })),
+        ]);
+        expect(result.settled).toBe(true);
+        if (result.settled && "value" in result) {
+            expect(result.value?.outputs?.[0]?.filename).toBe("MiniMax_H3_00004_.mp4");
+        }
     });
 
     it("throws ComfyuiNetworkError when network failure exceeds max retries in pollJobRaw", async () => {
@@ -1073,6 +1166,18 @@ describe("native ComfyUI video validation", () => {
 
     afterEach(() => {
         vi.unstubAllGlobals();
+    });
+
+    it("rejects a video prompt that still contains an unresolved node reference", async () => {
+        const error = await submitComfyuiVideoJob({
+            config: { ...buildFrameVideoConfig(), size: "1152x640" },
+            prompt: "@[node:text-808c8409-1256-4786-8e2e-5e97baefdd1d] <Picture 1>",
+            model: "omni-video-minimax-h3-fp8-4step-pdmd",
+            videoMode: "omni",
+        }).catch((caught: unknown) => caught);
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toContain("未展开");
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it("rejects an omni reference that has no uploadable payload before submission", async () => {

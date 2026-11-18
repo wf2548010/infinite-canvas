@@ -68,9 +68,22 @@ export function collectMediaStorageKeys(value: unknown, keys = new Set<string>()
 function readVideoMeta(url: string) {
     return new Promise<{ width: number; height: number; durationMs?: number }>((resolve) => {
         const video = document.createElement("video");
-        const done = () => resolve({ width: video.videoWidth || 1280, height: video.videoHeight || 720, durationMs: Number.isFinite(video.duration) ? Math.round(video.duration * 1000) : undefined });
-        video.onloadedmetadata = done;
-        video.onerror = done;
+        video.preload = "metadata";
+        let settled = false;
+        const done = () => {
+            if (settled) return;
+            settled = true;
+            resolve({ width: video.videoWidth || 1280, height: video.videoHeight || 720, durationMs: Number.isFinite(video.duration) ? Math.round(video.duration * 1000) : undefined });
+        };
+        const timer = setTimeout(done, 3000);
+        video.onloadedmetadata = () => {
+            clearTimeout(timer);
+            done();
+        };
+        video.onerror = () => {
+            clearTimeout(timer);
+            done();
+        };
         video.src = url;
     });
 }
