@@ -530,6 +530,21 @@ test("切换活动线程会清除上一线程的实时快照", (t) => {
     assert.deepEqual(client.events("agent_event"), []);
 });
 
+test("hello keeps protocol 6 and reports the WorkBuddy run", () => {
+    const session = new CanvasSession();
+    session.setProviderRun({ provider: "workbuddy", busy: true, turnId: "wb-turn-1" });
+    const client = connect(session, "client-1");
+    const hello = client.event("hello") as { protocolVersion?: number; providerRun?: { provider: string; busy: boolean; turnId: string } };
+    assert.equal(hello.protocolVersion, 6);
+    assert.deepEqual(hello.providerRun, { provider: "workbuddy", busy: true, turnId: "wb-turn-1" });
+    client.close();
+});
+
+test("canvas_get_state without a page says the canvas is not connected", async () => {
+    const session = new CanvasSession();
+    await assert.rejects(() => session.callTool("canvas_get_state", {}), /当前没有已连接画布/);
+});
+
 /** 创建用于测试的画布 SSE 连接。 */
 function connect(session: CanvasSession, clientId: string, activeThreadId = "") {
     const response = new FakeSseResponse();

@@ -1,11 +1,13 @@
+import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
 
 import { runClaudeTurn } from "../agent/claude.js";
-import { checkWorkbuddyStatus, replyWorkbuddyPermission, runWorkbuddyTurn, updateWorkbuddyConfig } from "../agent/workbuddy.js";
-import { archiveCodexThread, CodexSkillLookupError, configureCodexSkill, generateCodexSkillDraft, interruptCodexTurn, isRecoverableThreadError, listCodexModels, listCodexSkills, listCodexThreads, readCodexThread, resolveCodexApproval, resolveCodexSkill, resumeCodexThread, runCodexTurn, startCodexThread, summarizeCodexThread } from "../agent/codex.js";
+import { acknowledgeWorkbuddyPermission, checkWorkbuddyStatus, replyWorkbuddyPermission, runWorkbuddyTurn, updateWorkbuddyConfig } from "../agent/workbuddy.js";
+import { beginWorkbuddyHttpRun, endWorkbuddyHttpRun, interruptWorkbuddyHttpRun } from "./workbuddy-run.js";
+import { archiveCodexThread, CodexSkillLookupError, configureCodexSkill, generateCodexSkillDraft, interruptCodexTurn, listCodexModels, listCodexSkills, listCodexThreads, readCodexThread, resolveCodexApproval, resolveCodexSkill, resumeCodexThread, runCodexTurn, startCodexThread, summarizeCodexThread } from "../agent/codex.js";
 import type { CodexReasoningEffort, CodexSkillSelector } from "../agent/codex-protocol.js";
 import { messageMetadataStore } from "../agent/message-metadata.js";
 import type { AgentAttachment, AgentPermissionMode } from "../agent/types.js";
@@ -430,11 +432,28 @@ export function startHttpServer() {
         res.json({ ok: true });
     });
     app.post("/agent/workbuddy/turn", route(async (req, res) => {
-        void runWorkbuddyTurn(String(req.body?.prompt || ""), emit, {
-            threadId: req.body?.threadId ? String(req.body.threadId) : undefined,
-            sourceClientId: req.body?.clientId ? String(req.body.clientId) : undefined,
-        });
+        if (!getWorkbuddyConfig(loadConfig(true)).accessToken) return res.status(400).json({ ok: false, error: "请先在 Agent 设置中配置 WorkBuddy Access Token。" });
+        const run = beginWorkbuddyHttpRun();
+        if (!run.ok) return res.status(409).json(run);
+        const threadId = req.body?.threadId ? String(req.body.threadId) : undefined;
+        const turnId = `wb-turn-${crypto.randomUUID().slice(0, 8)}`;
+        session.setProviderRun({ provider: "workbuddy", busy: true, turnId });
         res.json({ ok: true });
+        try {
+            await runWorkbuddyTurn(String(req.body?.prompt || ""), emit, {
+                threadId,
+                sourceClientId: req.body?.clientId ? String(req.body.clientId) : undefined,
+                signal: run.controller.signal,
+                turnId,
+            });
+        } finally {
+            endWorkbuddyHttpRun();
+            session.setProviderRun(null);
+        }
+    }));
+    app.post("/agent/workbuddy/interrupt", route(async (_req, res) => {
+        const ok = interruptWorkbuddyHttpRun();
+        res.status(ok ? 200 : 409).json(ok ? { ok: true } : { ok: false, error: "当前没有可停止的 WorkBuddy 回复" });
     }));
     app.get("/agent/workbuddy/status", route(async (_req, res) => {
         const result = await checkWorkbuddyStatus(config);
@@ -464,6 +483,7 @@ export function startHttpServer() {
             String(req.body?.requestId || ""),
             (req.body?.answers || {}) as Record<string, unknown>
         );
+        acknowledgeWorkbuddyPermission(String(req.body?.requestId || ""));
         res.json(result);
     }));
     app.use((_req, res) => res.status(404).json({ ok: false, error: "not found" }));
@@ -481,15 +501,6 @@ export function startHttpServer() {
         console.log("WorkBuddy / MCP: npx -y @zhuyichuan/canvas-agent mcp");
         if (logger.enabled) console.log(`Debug log: ${logger.filePath}`);
         logger.info("Canvas Agent started", { url: config.url, workspace: ensureSiteWorkspace(config).workspacePath, debugLog: logger.filePath });
-        const activeThreadId = initialWorkspace.activeThreadId || "";
-        if (activeThreadId && session.beginCodexMutation()) {
-            void prepareExistingThread(activeThreadId).catch(async (error) => {
-                if (!isRecoverableThreadError(error)) return failPreparedConversation(error, activeThreadId);
-                session.beginConversation();
-                setActiveThread("", { emptyThread: true, draftThread: true }, true);
-                await prepareDraftThread("", "request");
-            }).finally(() => session.endCodexMutation()).catch(() => undefined);
-        }
     });
 }
 

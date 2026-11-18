@@ -7,6 +7,11 @@ description: Implemented changes that still need manual verification
 
 The current release needs manual verification in these areas:
 
+- Sidebar assistant switch:
+  - After the local Agent connects, WorkBuddy chat can send without waiting for Codex startup.
+  - Cursor mode shows the MCP config and no chat composer. The copied JSON contains `npx` and `@zhuyichuan/canvas-agent`.
+  - The composer accepts another message after a settled WorkBuddy reply, a stop, a timeout, or a send failure.
+  - An external MCP tool reports that no canvas is connected when the page Agent is disconnected.
 - Canvas drag, retry, and video submit:
   - Dragging a node follows the pointer, and the position remains after refresh. In collaboration, a position-only move should not re-upload every asset.
   - A normal execution failure retries with a new submission. Continue-polling appears only for a timeout or network interruption that still has a job id.
