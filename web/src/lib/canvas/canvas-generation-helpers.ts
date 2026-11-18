@@ -324,12 +324,15 @@ export function localizeErrorDetails(errorDetails?: string): string | undefined 
 /**
  * 计算节点加载中文案（排队位次、重连中或常规生成中）
  */
-export function formatNodeLoadingText(meta?: { queuePosition?: number; networkRetryText?: string }): string {
+export function formatNodeLoadingText(meta?: { queuePosition?: number; networkRetryText?: string; progressValue?: number; progressMax?: number }): string {
     if (meta?.networkRetryText) {
         return meta.networkRetryText;
     }
     if (typeof meta?.queuePosition === "number" && meta.queuePosition > 0) {
         return `排队中 (第 ${meta.queuePosition} 位)`;
+    }
+    if (typeof meta?.progressValue === "number" && typeof meta.progressMax === "number" && meta.progressMax > 0) {
+        return `生成中 (${meta.progressValue}/${meta.progressMax})`;
     }
     return i18n.t("canvas.node.generating");
 }
@@ -551,13 +554,17 @@ export function updateNodeGenerationProgress(
     nodes: CanvasNodeData[],
     targetNodeId: string,
     status: string,
-    detail?: { jobId?: string; queuePosition?: number; message?: string },
+    detail?: { jobId?: string; queuePosition?: number; message?: string; progressPct?: number; value?: number; max?: number },
     slotId?: string,
 ): CanvasNodeData[] {
+    const sampling = status === "running" && typeof detail?.value === "number" && typeof detail.max === "number" && detail.max > 0
+        ? { progressPct: typeof detail.progressPct === "number" ? detail.progressPct : Math.round((detail.value / detail.max) * 100), progressValue: detail.value, progressMax: detail.max }
+        : {};
+    const clearSampling = status === "submitted" || status === "pending" ? { progressPct: undefined, progressValue: undefined, progressMax: undefined } : {};
     const patch = {
-        ...(status === "submitted" && detail?.jobId ? { jobId: detail.jobId, networkRetryText: undefined } : {}),
-        ...(status === "pending" && typeof detail?.queuePosition === "number" ? { queuePosition: detail.queuePosition, networkRetryText: undefined } : {}),
-        ...(status === "running" ? { queuePosition: undefined, networkRetryText: undefined } : {}),
+        ...(status === "submitted" && detail?.jobId ? { jobId: detail.jobId, networkRetryText: undefined, ...clearSampling } : {}),
+        ...(status === "pending" && typeof detail?.queuePosition === "number" ? { queuePosition: detail.queuePosition, networkRetryText: undefined, ...clearSampling } : {}),
+        ...(status === "running" ? { queuePosition: undefined, networkRetryText: undefined, ...sampling } : {}),
         ...(status === "network_retry" ? { networkRetryText: detail?.message || "服务重连中..." } : {}),
     };
     return nodes.map((node) => {

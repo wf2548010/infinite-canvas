@@ -496,6 +496,10 @@ describe("formatNodeLoadingText", () => {
     it("formats queue position when in queue", () => {
         expect(formatNodeLoadingText({ queuePosition: 4 })).toBe("排队中 (第 4 位)");
     });
+
+    it("shows the current sampling step ahead of a bare generating label", () => {
+        expect(formatNodeLoadingText({ progressValue: 3, progressMax: 10, progressPct: 30 })).toBe("生成中 (3/10)");
+    });
 });
 
 describe("updateNodeGenerationProgress", () => {
@@ -521,6 +525,21 @@ describe("updateNodeGenerationProgress", () => {
         const updated3 = updateNodeGenerationProgress(updated2, "node-1", "running");
         expect(updated3[0].metadata?.queuePosition).toBeUndefined();
         expect(updated3[0].metadata?.networkRetryText).toBeUndefined();
+    });
+
+    it("writes sampling progress onto the node and keeps it when a later running tick has no step", () => {
+        const node = makeNode(CanvasNodeType.Video, { status: "loading" }, "video-1");
+        const sampling = updateNodeGenerationProgress([node], "video-1", "running", { progressPct: 30, value: 3, max: 10 });
+        expect(sampling[0].metadata).toMatchObject({ progressPct: 30, progressValue: 3, progressMax: 10, queuePosition: undefined });
+
+        const stillRunning = updateNodeGenerationProgress(sampling, "video-1", "running");
+        expect(stillRunning[0].metadata).toMatchObject({ progressPct: 30, progressValue: 3, progressMax: 10 });
+
+        const queued = updateNodeGenerationProgress(stillRunning, "video-1", "pending", { queuePosition: 1 });
+        expect(queued[0].metadata?.queuePosition).toBe(1);
+        expect(queued[0].metadata?.progressPct).toBeUndefined();
+        expect(queued[0].metadata?.progressValue).toBeUndefined();
+        expect(queued[0].metadata?.progressMax).toBeUndefined();
     });
 
     it("updates target slot image within batch node", () => {

@@ -270,6 +270,49 @@ describe("canvas submission failure settlement through the page callbacks", () =
         expect(result?.metadata?.images?.map((image) => image.status).sort()).toEqual(["error", "success"]);
     });
 
+    it("writes video sampling progress back onto the generating node", async () => {
+        let progress: ((status: string, detail?: { queuePosition?: number; message?: string; progressPct?: number; value?: number; max?: number }) => void) | undefined;
+        let started: () => void = () => undefined;
+        const startedPromise = new Promise<void>((resolve) => {
+            started = resolve;
+        });
+        let rejectRequest: (error: Error) => void = () => undefined;
+        harness.requestVideo.mockImplementation((_config, _prompt, _images, options) => {
+            progress = options.onProgress;
+            started();
+            return new Promise((_resolve, reject) => {
+                rejectRequest = reject;
+            });
+        });
+        await mount(makeNode(CanvasNodeType.Video));
+        const generation = harness.generateRef.current("source", "video", "测试提示词");
+        await act(async () => {
+            await startedPromise;
+        });
+        expect(progress, "video generation must expose a progress callback").toBeTypeOf("function");
+        await act(async () => {
+            progress!("running", { progressPct: 30, value: 3, max: 10 });
+        });
+        expect(harness.nodeProps.get("source")?.data.metadata).toMatchObject({ status: "loading", progressPct: 30, progressValue: 3, progressMax: 10 });
+        await act(async () => {
+            progress!("running");
+        });
+        expect(harness.nodeProps.get("source")?.data.metadata).toMatchObject({ progressPct: 30, progressValue: 3, progressMax: 10 });
+        await act(async () => {
+            progress!("network_retry", { message: "服务连接中断，正在重试 (1/5)..." });
+        });
+        expect(harness.nodeProps.get("source")?.data.metadata?.networkRetryText).toBe("服务连接中断，正在重试 (1/5)...");
+        await act(async () => {
+            progress!("pending", { queuePosition: 2 });
+        });
+        expect(harness.nodeProps.get("source")?.data.metadata).toMatchObject({ queuePosition: 2 });
+        expect(harness.nodeProps.get("source")?.data.metadata?.progressPct).toBeUndefined();
+        await act(async () => {
+            rejectRequest(new Error("stop"));
+            await generation.catch(() => undefined);
+        });
+    });
+
     it("retains the confirmed task ID when submission progress precedes a network failure", async () => {
         await mount(makeNode(CanvasNodeType.Config));
         harness.requestImage.mockImplementationOnce(async (_config, _prompt, options) => {
