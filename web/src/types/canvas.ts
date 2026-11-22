@@ -1,3 +1,4 @@
+import type { DirectorProject } from "@/lib/canvas/director-desk";
 import type { ModelSupportedTools } from "@/services/api/models/types";
 
 export type Position = {
@@ -18,6 +19,7 @@ export enum CanvasNodeType {
     Video = "video",
     Audio = "audio",
     Group = "group",
+    Director = "director",
 }
 
 // Node types are open strings: built-ins use CanvasNodeType and plugins use "<pluginId>:<name>".
@@ -117,6 +119,7 @@ export type CanvasNodeMetadata = {
     bytes?: number;
     durationMs?: number;
     groupId?: string;
+    director?: DirectorProject;
     interactive?: boolean; // Plugin node interaction/move state; see CanvasNodeDefinition.interactionToggle.
     supportedTools?: ModelSupportedTools;
 };

@@ -426,7 +426,8 @@ export default {
             "config": "Generation config",
             "video": "Video",
             "audio": "Audio",
-            "group": "Group"
+            "group": "Group",
+            "director": "Director"
         },
         "toolbar": {
             "select": "Select",
@@ -434,6 +435,7 @@ export default {
             "text": "Text",
             "image": "Image",
             "video": "Video",
+            "director": "Director",
             "audio": "Audio",
             "config": "Generation config",
             "group": "Group",
@@ -450,6 +452,48 @@ export default {
             "lines": "Lines",
             "blank": "Blank",
             "imageInfo": "Image info"
+        },
+        "director": {
+            "open": "Open director",
+            "title": "Title",
+            "segments": "shots",
+            "reference": "References",
+            "frames": "First and last frame",
+            "size": "Size",
+            "generate": "Generate {{count}}",
+            "running": "Generating",
+            "close": "Close",
+            "commonAssets": "Shared references",
+            "addAsset": "Add a shared reference",
+            "assetName": "Reference {{index}}",
+            "extra": "Shot reference",
+            "extraSlot": "This shot, Picture 4",
+            "addExtra": "Add a shot reference",
+            "commonPrompt": "Shared prompt",
+            "thisShot": "Frames for this shot",
+            "start": "First frame",
+            "end": "Last frame",
+            "noStart": "No first frame yet",
+            "noEnd": "No last frame yet",
+            "previousTail": "Tail of the previous shot",
+            "frameHint": "The prompt describes the motion between the two frames. An empty first frame uses the previous shot's tail when continuity is on.",
+            "linkedHint": "Images linked to this node fill empty reference slots.",
+            "storyboard": "Storyboard",
+            "addShot": "Add a shot",
+            "done": "Clip ready",
+            "pending": "Not generated",
+            "current": "Current shot",
+            "shotTitle": "Shot title",
+            "continuity": "Use previous shot",
+            "continuityHint": "Shots overlap by a fixed 22 frames. The first shot has no previous shot.",
+            "prompt": "Shot prompt",
+            "regenerateHint": "This shot already has a clip. Generate again after changing the prompt.",
+            "emptyHint": "This shot has no clip yet.",
+            "removeShot": "Remove this shot",
+            "timeline": "Timeline · only checked shots are generated",
+            "idleReceipt": "Sampling stays inside the director node. Only checked shots are generated, and each clip returns to the timeline. Current size {{pixel}}.",
+            "uploadFailed": "Could not save the image",
+            "failed": "Director generation failed"
         },
         "project": {
             "untitled": "Untitled canvas",
@@ -600,7 +644,8 @@ export default {
                 "text": "Text",
                 "audio": "Audio",
                 "config": "Configuration",
-                "group": "Group"
+                "group": "Group",
+                "director": "Director"
             }
         },
         "assetPicker": {

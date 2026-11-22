@@ -7,6 +7,13 @@ description: Implemented changes that still need manual verification
 
 The current release needs manual verification in these areas:
 
+- 导演台节点：
+  - 工具栏点「导演台」，确认出现透明卡片并自动打开导演台；双击卡片或点「打开导演台」也能打开。
+  - 参考素材与首尾帧可切换，16:9 / 9:16 和 0.4 / 0.5 / 0.98 尺寸只在这三档里变化。采样步数、采样器不出现在界面上。
+  - 第一段不能打开「引用上段」。后面的段打开后，首尾帧模式的空首帧不要求再上传。
+  - 只勾选的段会生成。取消全部勾选后生成按钮不可用。
+  - 把图片节点连到导演台，空的素材位会用这些图片补上；已经挂上文件的位置保持不变。
+  - ComfyUI 未填地址或未安装 `ComfyUI_MiniMaxH3_Director` 时，生成会直接说明原因。装好插件后，勾选的段各自回到时间轴。
 - Canvas drag, retry, and video submit:
   - Dragging a node follows the pointer, and the position remains after refresh. In collaboration, a position-only move should not re-upload every asset.
   - A normal execution failure retries with a new submission. Continue-polling appears only for a timeout or network interruption that still has a job id.

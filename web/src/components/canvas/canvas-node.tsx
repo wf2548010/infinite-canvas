@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ChevronRight, Copy, Download, Group, Image as ImageIcon, Music2, Plus, Puzzle, Star, Video } from "lucide-react";
+import { ChevronRight, Clapperboard, Copy, Download, Group, Image as ImageIcon, Music2, Plus, Puzzle, Star, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
+import { emitCanvasEvent } from "@/lib/canvas/canvas-event-bus";
+import { activeShots, readDirectorProject } from "@/lib/canvas/director-desk";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { buildNodeContext } from "@/lib/canvas/plugin-node-context";
 import { useCollabStore } from "@/stores/use-collab-store";
@@ -449,6 +451,11 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onSelectGroupChildren?.(data.id);
                         return;
                     }
+                    if (data.type === CanvasNodeType.Director) {
+                        event.stopPropagation();
+                        emitCanvasEvent("director:open", data.id);
+                        return;
+                    }
                     if (data.type !== CanvasNodeType.Text) return;
                     event.stopPropagation();
                     setIsEditingContent(true);
@@ -534,6 +541,7 @@ function NodeContent(props: NodeContentRendererProps) {
     const hasContent = Boolean(node.metadata?.content || slots.some((slot) => slot.content));
     const isConfig = node.type === CanvasNodeType.Config && Boolean(props.renderNodeContent);
     const failedWithoutContent = !hasContent && (node.metadata?.status === "error" || slots.length > 0 && slots.every((slot) => slot.status === "error"));
+    if (node.type === CanvasNodeType.Director) return <DirectorNodeContent {...props} />;
     if (!isConfig && failedWithoutContent && !props.isBatchRoot) return <CanvasGenerationError node={node} onRetry={props.onRetry} />;
     const rendersSlots = node.type === CanvasNodeType.Image && props.isBatchRoot || node.type === CanvasNodeType.Text && slots.length > 0;
     if (!isConfig && node.metadata?.status === "loading" && !rendersSlots) return <LoadingContent theme={props.theme} node={node} />;
@@ -563,7 +571,40 @@ const nodeContentRenderers = {
     [CanvasNodeType.Video]: VideoNodeContent,
     [CanvasNodeType.Audio]: AudioNodeContent,
     [CanvasNodeType.Group]: GroupNodeContent,
+    [CanvasNodeType.Director]: DirectorNodeContent,
 } satisfies Record<CanvasNodeType, (props: NodeContentRendererProps) => ReactNode>;
+
+function DirectorNodeContent({ node, theme }: NodeContentRendererProps) {
+    const { t } = useTranslation();
+    const project = readDirectorProject(node.metadata?.director);
+    const shots = activeShots(project);
+    const seconds = shots.reduce((sum, shot) => sum + shot.seconds, 0);
+    return (
+        <div className="flex h-full w-full flex-col justify-between p-4" style={{ color: theme.node.text }}>
+            <div>
+                <div className="flex items-center gap-2 text-sm font-medium">
+                    <Clapperboard className="size-4" style={{ color: theme.node.muted }} />
+                    <span className="truncate">{project.title}</span>
+                </div>
+                <p className="mt-2 text-xs" style={{ color: theme.node.muted }}>
+                    {project.mode === "r2v" ? t("canvas.director.reference") : t("canvas.director.frames")} · {seconds}s · {shots.length} {t("canvas.director.segments")}
+                </p>
+            </div>
+            <button
+                type="button"
+                className="self-start text-xs hover:bg-black/5 dark:hover:bg-white/10"
+                style={{ color: theme.node.text }}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    emitCanvasEvent("director:open", node.id);
+                }}
+            >
+                {t("canvas.director.open")}
+            </button>
+        </div>
+    );
+}
 
 function GroupNodeContent({ node, theme, groupChildCount, scale }: NodeContentRendererProps) {
     const { t } = useTranslation();

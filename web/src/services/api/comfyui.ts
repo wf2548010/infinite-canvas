@@ -822,6 +822,12 @@ export const COMFYUI_CORE_PLUGINS = [
         keywords: ["layerstyle", "layermask"],
         desc: "遮罩处理与图层合成",
     },
+    {
+        name: "ComfyUI_MiniMaxH3_Director",
+        url: "https://github.com/AIMixer/ComfyUI_MiniMaxH3_Director",
+        keywords: ["minimaxh3director", "comfyminimaxh3director"],
+        desc: "MiniMax H3 多段导演台",
+    },
 ];
 
 export function translateComfyuiValidationError(errMsg: string): string {

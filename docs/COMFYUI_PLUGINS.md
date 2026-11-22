@@ -105,6 +105,16 @@ git clone https://github.com/chflame163/ComfyUI_LayerStyle.git
 - **作用机制**：
   在画布中进行「局部遮罩编辑」时，前端会将用户涂抹的白色 Mask 图片上传并绑定到 `ref_mask` 槽位。`ComfyUI_LayerStyle` 节点负责将遮罩与原图进行尺寸校验、图层对齐与预处理，确保 ControlNet 与重绘采样器精准作用于目标区域。
 
+### 4.6 ComfyUI_MiniMaxH3_Director（导演台附加插件）
+
+上面 5 个插件仍然是现有图片、视频和遮罩工作流的依赖。画布里的「导演台」节点另外需要这个插件，ComfyUI 版本不低于 0.30.0：
+
+```bash
+git clone https://github.com/AIMixer/ComfyUI_MiniMaxH3_Director.git
+```
+
+导演台只提交 `MiniMaxH3Director`。成片合成使用 Video Helper Suite 的 `VHS_VideoCombine`：`https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite`。
+
 ---
 
 ## 5. 两种安装方式指引

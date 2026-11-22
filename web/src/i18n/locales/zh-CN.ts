@@ -426,7 +426,8 @@ export default {
             "config": "生成配置",
             "video": "视频",
             "audio": "音频",
-            "group": "组"
+            "group": "组",
+            "director": "导演台"
         },
         "toolbar": {
             "select": "选择",
@@ -434,6 +435,7 @@ export default {
             "text": "文本",
             "image": "图片",
             "video": "视频",
+            "director": "导演台",
             "audio": "音频",
             "config": "生成配置",
             "group": "组",
@@ -450,6 +452,48 @@ export default {
             "lines": "线",
             "blank": "空白",
             "imageInfo": "图片信息"
+        },
+        "director": {
+            "open": "打开导演台",
+            "title": "片名",
+            "segments": "段",
+            "reference": "参考素材",
+            "frames": "首尾帧",
+            "size": "尺寸",
+            "generate": "生成 {{count}} 段",
+            "running": "生成中",
+            "close": "关闭",
+            "commonAssets": "公共素材",
+            "addAsset": "添加公共素材",
+            "assetName": "素材 {{index}}",
+            "extra": "本段素材",
+            "extraSlot": "本段 Picture 4",
+            "addExtra": "添加本段素材",
+            "commonPrompt": "公共提示词",
+            "thisShot": "这一段的画面",
+            "start": "首帧",
+            "end": "尾帧",
+            "noStart": "还没有首帧",
+            "noEnd": "还没有尾帧",
+            "previousTail": "上一段末尾",
+            "frameHint": "提示词写两帧之间的运动。空的首帧在打开引用上段后，用上一段末尾接上。",
+            "linkedHint": "连到这个节点的图片会补进还空着的素材位。",
+            "storyboard": "分镜",
+            "addShot": "添加一段",
+            "done": "已有成片",
+            "pending": "待生成",
+            "current": "当前镜头",
+            "shotTitle": "镜头名",
+            "continuity": "引用上段",
+            "continuityHint": "段间衔接固定 22 帧。第一段没有上一段。",
+            "prompt": "镜头提示词",
+            "regenerateHint": "这一段已有成片，改提示词后需要重新生成。",
+            "emptyHint": "这一段还没有成片。",
+            "removeShot": "删除这段",
+            "timeline": "时间轴 · 勾选的段才会生成",
+            "idleReceipt": "采样参数锁在导演台节点里。勾选的段才会生成，成片按段回到时间轴。当前 {{pixel}}。",
+            "uploadFailed": "素材上传失败",
+            "failed": "导演台生成失败"
         },
         "project": {
             "untitled": "未命名画布",
@@ -600,7 +644,8 @@ export default {
                 "text": "文本",
                 "audio": "音频",
                 "config": "配置",
-                "group": "分组"
+                "group": "分组",
+                "director": "导演台"
             }
         },
         "assetPicker": {

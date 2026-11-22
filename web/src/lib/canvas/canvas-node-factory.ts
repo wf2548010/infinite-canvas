@@ -10,18 +10,20 @@ import { CanvasNodeType, type CanvasImageGenerationType, type CanvasNodeData, ty
 export function createCanvasNode(type: CanvasNodeTypeId, position: Position, metadata?: CanvasNodeMetadata): CanvasNodeData {
     const spec = getNodeSpec(type);
     const id = `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const merged: CanvasNodeMetadata = { ...spec.metadata, ...metadata };
+    if (merged.director) merged.director = structuredClone(merged.director);
 
     return {
         id,
         type,
-        title: spec.title,
+        title: merged.director?.title || spec.title,
         position: {
             x: position.x - spec.width / 2,
             y: position.y - spec.height / 2,
         },
         width: spec.width,
         height: spec.height,
-        metadata: { ...spec.metadata, ...metadata },
+        metadata: merged,
     };
 }
 

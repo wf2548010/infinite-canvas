@@ -1,4 +1,5 @@
 import i18n from "@/i18n";
+import { createDirectorProject } from "@/lib/canvas/director-desk";
 import { CanvasNodeType } from "@/types/canvas";
 import type { CanvasNodeMetadata } from "@/types/canvas";
 import { getNodeSpec as getRegistryNodeSpec } from "@/lib/canvas/node-registry";
@@ -17,6 +18,7 @@ export const NODE_DEFAULT_SIZE = {
     [CanvasNodeType.Video]: { width: 420, height: 236, get title() { return i18n.t("canvas.nodeTypes.video"); } },
     [CanvasNodeType.Audio]: { width: 340, height: 120, get title() { return i18n.t("canvas.nodeTypes.audio"); } },
     [CanvasNodeType.Group]: { width: 760, height: 480, get title() { return i18n.t("canvas.nodeTypes.group"); } },
+    [CanvasNodeType.Director]: { width: 340, height: 168, get title() { return i18n.t("canvas.nodeTypes.director"); } },
 } satisfies Record<CanvasNodeType, { width: number; height: number; title: string }>;
 
 export const NODE_SPECS = {
@@ -43,6 +45,10 @@ export const NODE_SPECS = {
     [CanvasNodeType.Group]: {
         width: 760, height: 480, get title() { return NODE_DEFAULT_SIZE[CanvasNodeType.Group].title; },
         metadata: { status: "idle" },
+    },
+    [CanvasNodeType.Director]: {
+        width: 340, height: 168, get title() { return NODE_DEFAULT_SIZE[CanvasNodeType.Director].title; },
+        metadata: { status: "idle", director: createDirectorProject() },
     },
 } satisfies Record<CanvasNodeType, CanvasNodeSpec>;
 

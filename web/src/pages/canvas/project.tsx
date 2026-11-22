@@ -32,6 +32,7 @@ import { CanvasNodeCropDialog, type CanvasImageCropRect } from "@/components/can
 import { CanvasNodeMaskEditDialog, type CanvasImageMaskEditPayload } from "@/components/canvas/canvas-node-mask-edit-dialog";
 import { CanvasNodeSplitDialog, type CanvasImageSplitParams } from "@/components/canvas/canvas-node-split-dialog";
 import { CanvasNodeUpscaleDialog, type CanvasImageUpscaleParams } from "@/components/canvas/canvas-node-upscale-dialog";
+import { CanvasDirectorDesk } from "@/components/canvas/canvas-director-desk";
 import { CanvasFaceRefineModal } from "@/components/canvas/canvas-face-refine-modal";
 import { CanvasDepthVideoModal } from "@/components/canvas/canvas-depth-video-modal";
 import { buildNodeGenerationContext, buildNodeGenerationInputs, buildNodeResponseMessages, hydrateNodeGenerationContext, type NodeGenerationContext, type NodeGenerationInput } from "@/components/canvas/canvas-node-generation";
@@ -104,6 +105,8 @@ import {
     shouldMarkGenerationSourceStatus,
     updateNodeGenerationProgress,
 } from "@/lib/canvas/canvas-generation-helpers";
+import { onCanvasEvent } from "@/lib/canvas/canvas-event-bus";
+import { readDirectorProject } from "@/lib/canvas/director-desk";
 import { getNodeDefinition, isBuiltinNodeType as isBuiltinType, useNodeRegistryVersion } from "@/lib/canvas/node-registry";
 import { registerBuiltinNodes } from "@/components/canvas/nodes/builtin-nodes";
 import { CanvasInterruptedBanner } from "@/components/canvas/canvas-interrupted-banner";
@@ -294,6 +297,32 @@ function InfiniteCanvasPage() {
     const [editingTitleNodeId, setEditingTitleNodeId] = useState<string | null>(null);
     const [nodeImageSettingsOpen, setNodeImageSettingsOpen] = useState(false);
     const [dialogNodeId, setDialogNodeId] = useState<string | null>(null);
+    const [directorNodeId, setDirectorNodeId] = useState<string | null>(null);
+    useEffect(() => {
+        const unsubscribe = onCanvasEvent("director:open", (payload) => {
+            if (typeof payload === "string") setDirectorNodeId(payload);
+        });
+        return () => {
+            unsubscribe();
+        };
+    }, []);
+    const directorDesk = useMemo(() => {
+        const node = nodes.find((item) => item.id === directorNodeId);
+        if (!node || node.type !== CanvasNodeType.Director) return null;
+        const sources = new Set(connections.filter((item) => item.toNodeId === node.id).map((item) => item.fromNodeId));
+        const linked = nodes.flatMap((item) => {
+            if (!sources.has(item.id) || item.type !== CanvasNodeType.Image) return [];
+            const slots = item.metadata?.images?.filter((image) => image.content || image.storageKey) || [];
+            const images = slots.length ? slots : [{ id: item.id, content: item.metadata?.content, storageKey: item.metadata?.storageKey }];
+            return images.filter((image) => image.content || image.storageKey).map((image) => ({
+                id: image.id || item.id,
+                name: item.title,
+                storageKey: image.storageKey,
+                url: image.content,
+            }));
+        });
+        return { node, project: readDirectorProject(node.metadata?.director), linked };
+    }, [connections, directorNodeId, nodes]);
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
     const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
     const [cropNodeId, setCropNodeId] = useState<string | null>(null);
@@ -1071,6 +1100,7 @@ function InfiniteCanvasPage() {
                     ? true
                     : isBuiltinType(type) && type !== CanvasNodeType.Text && type !== CanvasNodeType.Group;
             if (wantsPanel) setDialogNodeId(newNode.id);
+            if (type === CanvasNodeType.Director) setDirectorNodeId(newNode.id);
         },
         [effectiveConfig.canvasImageCount, effectiveConfig.count, effectiveConfig.imageModel, effectiveConfig.model, effectiveConfig.size, getCanvasCenter],
     );
@@ -4864,6 +4894,7 @@ function InfiniteCanvasPage() {
                         showImageInfo={showImageInfo}
                         onAddImage={() => createNode(CanvasNodeType.Image)}
                         onAddVideo={() => createNode(CanvasNodeType.Video)}
+                        onAddDirector={() => createNode(CanvasNodeType.Director)}
                         onAddAudio={() => createNode(CanvasNodeType.Audio)}
                         onAddText={() => createNode(CanvasNodeType.Text)}
                         onAddConfig={() => createNode(CanvasNodeType.Config)}
@@ -4976,6 +5007,15 @@ function InfiniteCanvasPage() {
                         }
                     }}
                 />
+
+                {directorDesk ? (
+                    <CanvasDirectorDesk
+                        project={directorDesk.project}
+                        linkedImages={directorDesk.linked}
+                        onChange={(next) => setNodes((prev) => prev.map((node) => node.id === directorDesk.node.id ? { ...node, title: next.title || node.title, metadata: { ...node.metadata, director: next } } : node))}
+                        onClose={() => setDirectorNodeId(null)}
+                    />
+                ) : null}
 
                 <CanvasDepthVideoModal
                     open={Boolean(depthVideoNode)}
