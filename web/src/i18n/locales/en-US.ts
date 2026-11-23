@@ -492,6 +492,7 @@ export default {
             "removeShot": "Remove this shot",
             "timeline": "Timeline · only checked shots are generated",
             "idleReceipt": "Sampling stays inside the director node. Only checked shots are generated, and each clip returns to the timeline. Current size {{pixel}}.",
+            "placed": "Placed {{count}} clips on the canvas and in canvas assets.",
             "uploadFailed": "Could not save the image",
             "failed": "Director generation failed"
         },
@@ -993,7 +994,8 @@ export default {
             "connect_nodes": "Connect",
             "set_viewport": "Adjust view",
             "select_nodes": "Select nodes",
-            "run_generation": "Run generation"
+            "run_generation": "Run generation",
+            "run_director": "Start director"
         },
         "pluginErrors": {
             "invalidExport": "The plugin did not export a valid object",
@@ -1959,6 +1961,9 @@ export default {
                 "selectNodes": "Select nodes",
                 "setViewport": "Adjust viewport",
                 "runGeneration": "Run generation",
+                "readDirector": "Read director",
+                "updateDirector": "Update director",
+                "generateDirector": "Start director",
                 "openPage": "Open page"
             }
         },

@@ -492,6 +492,7 @@ export default {
             "removeShot": "删除这段",
             "timeline": "时间轴 · 勾选的段才会生成",
             "idleReceipt": "采样参数锁在导演台节点里。勾选的段才会生成，成片按段回到时间轴。当前 {{pixel}}。",
+            "placed": "已把 {{count}} 段放到画布，并收入画布资产。",
             "uploadFailed": "素材上传失败",
             "failed": "导演台生成失败"
         },
@@ -993,7 +994,8 @@ export default {
             "connect_nodes": "连接",
             "set_viewport": "调整视图",
             "select_nodes": "选择节点",
-            "run_generation": "触发生成"
+            "run_generation": "触发生成",
+            "run_director": "开始导演台"
         },
         "pluginErrors": {
             "invalidExport": "插件未导出有效对象",
@@ -1959,6 +1961,9 @@ export default {
                 "selectNodes": "选择节点",
                 "setViewport": "调整视口",
                 "runGeneration": "触发生成",
+                "readDirector": "读取导演台",
+                "updateDirector": "更新导演台",
+                "generateDirector": "开始导演台",
                 "openPage": "打开页面"
             }
         },

@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    activeShots,
     addDirectorShot,
     buildDirectorTimeline,
     buildDirectorWorkflow,
     createDirectorProject,
+    directorRunClips,
     directorSize,
+    mapSegmentExportsToShots,
     minimaxFrames,
+    parseSegmentExportName,
     planDirectorUploads,
     readDirectorProject,
+    resolveDirectorComfyui,
+    withDirectorRunSelection,
 } from "@/lib/canvas/director-desk";
 
 describe("director desk timeline", () => {
@@ -96,6 +102,46 @@ describe("director desk timeline", () => {
         expect(workflow["6"].class_type).toBe("VHS_VideoCombine");
         expect(workflow["6"]._meta.title).toBe("output_video");
         expect(workflow["6"].inputs.images).toEqual(["5", 0]);
+    });
+
+    it("maps each exported segment file onto the checked shot with the same timeline index", () => {
+        const shots = activeShots(createDirectorProject());
+        expect(parseSegmentExportName("seg_0001.mp4")).toBe(1);
+        expect(parseSegmentExportName("seg_0001_pre.mp4")).toBeNull();
+        const mapped = mapSegmentExportsToShots(shots, [
+            { index: 0, filename: "seg_0000.mp4", subfolder: "minimax_seg_export/run" },
+            { index: 1, filename: "seg_0001.mp4", subfolder: "minimax_seg_export/run" },
+        ]);
+        expect(mapped.find((item) => item.id === "s1")?.file?.filename).toBe("seg_0000.mp4");
+        expect(mapped.find((item) => item.id === "s2")?.file?.filename).toBe("seg_0001.mp4");
+        expect(mapped.find((item) => item.id === "s3")?.file).toBeUndefined();
+    });
+
+    it("checks only the shots an agent asked to generate", () => {
+        const next = withDirectorRunSelection(createDirectorProject(), ["s3"]);
+        expect(next.r2v.map((shot) => shot.run)).toEqual([false, false, true]);
+        expect(() => withDirectorRunSelection(createDirectorProject(), ["missing"])).toThrow("找不到分段");
+    });
+
+    it("lists only the clips produced by the current run", () => {
+        const project = createDirectorProject();
+        project.r2v[0] = { ...project.r2v[0], status: "generated", videoStorageKey: "director:s1", videoUrl: "blob:s1" };
+        project.r2v[2] = { ...project.r2v[2], status: "generated", videoStorageKey: "director:old", videoUrl: "blob:old" };
+        expect(directorRunClips(project).map((clip) => clip.id)).toEqual(["s1"]);
+        expect(directorRunClips(project)[0]).toMatchObject({ id: "s1", title: "撑伞入画", url: "blob:s1", storageKey: "director:s1", width: 960, height: 544 });
+    });
+
+    it("uses the global channel address instead of the video model channel", () => {
+        const config = {
+            channelId: "builtin",
+            videoModel: "cloud::MiniMax H3 全能视频",
+            channels: [
+                { id: "builtin", comfyuiProxyUrl: "http://localhost:6006", comfyuiProxyToken: "global-token" },
+                { id: "cloud", comfyuiProxyUrl: "http://127.0.0.1:8188", comfyuiProxyToken: "other-token" },
+            ],
+        };
+        expect(resolveDirectorComfyui(config)).toEqual({ baseUrl: "http://localhost:6006", token: "global-token" });
+        expect(resolveDirectorComfyui({ ...config, channelId: undefined })).toEqual({ baseUrl: "http://localhost:6006", token: "global-token" });
     });
 
     it("keeps a saved project and adds a shot on the active mode", () => {

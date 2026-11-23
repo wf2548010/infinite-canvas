@@ -20,6 +20,7 @@ type AgentBridgeParams = {
     selectedNodeIdsRef: MutableRefObject<Set<string>>;
     viewportRef: MutableRefObject<ViewportTransform>;
     generateNodeRef: GenerateNodeRef;
+    runDirectorRef: MutableRefObject<((nodeId: string) => Promise<void>) | null>;
     setNodes: Dispatch<SetStateAction<CanvasNodeData[]>>;
     setConnections: Dispatch<SetStateAction<CanvasConnection[]>>;
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
@@ -33,7 +34,7 @@ type AgentBridgeParams = {
  * to the Agent store for the local WorkBuddy / Agent panel. All members except applyAgentOps are internal.
  */
 export function useAgentBridge(params: AgentBridgeParams) {
-    const { projectId, title, nodes, connections, selectedNodeIds, viewport, nodesRef, connectionsRef, selectedNodeIdsRef, viewportRef, generateNodeRef, setNodes, setConnections, setSelectedNodeIds, setSelectedConnectionId, setViewport, setContextMenu } =
+    const { projectId, title, nodes, connections, selectedNodeIds, viewport, nodesRef, connectionsRef, selectedNodeIdsRef, viewportRef, generateNodeRef, runDirectorRef, setNodes, setConnections, setSelectedNodeIds, setSelectedConnectionId, setViewport, setContextMenu } =
         params;
     const setAgentCanvasContext = useAgentStore((state) => state.setCanvasContext);
     const [agentUndoSnapshot, setAgentUndoSnapshot] = useState<CanvasAgentSnapshot | null>(null);
@@ -60,6 +61,7 @@ export function useAgentBridge(params: AgentBridgeParams) {
             setSelectedConnectionId(null);
             setViewport(next.viewport);
             setContextMenu(null);
+            const directorOps = safeOps.filter((op): op is Extract<CanvasAgentOp, { type: "run_director" }> => op.type === "run_director" && Boolean(op.nodeId));
             if (generationOps.length) {
                 queueMicrotask(() =>
                     generationOps.forEach((op) => {
@@ -68,6 +70,9 @@ export function useAgentBridge(params: AgentBridgeParams) {
                         void generateNodeRef.current?.(op.nodeId, op.mode || target?.metadata?.generationMode || "image", prompt);
                     }),
                 );
+            }
+            if (directorOps.length) {
+                queueMicrotask(() => directorOps.forEach((op) => void runDirectorRef.current?.(op.nodeId)));
             }
             return { ...next, projectId, title: projectTitle };
         },

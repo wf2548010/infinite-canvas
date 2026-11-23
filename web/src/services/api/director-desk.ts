@@ -1,6 +1,6 @@
 import { uploadMediaFile } from "@/services/file-storage";
 import { resolveImageUrl } from "@/services/image-storage";
-import { resolveModelChannel, type AiConfig } from "@/stores/use-config-store";
+import type { AiConfig } from "@/stores/use-config-store";
 
 import {
     JOB_TIMEOUT_MS,
@@ -15,8 +15,11 @@ import {
     activeShots,
     buildDirectorTimeline,
     buildDirectorWorkflow,
+    mapSegmentExportsToShots,
     mediaReady,
+    parseSegmentExportName,
     planDirectorUploads,
+    resolveDirectorComfyui,
     type DirectorFileMap,
     type DirectorMedia,
     type DirectorProject,
@@ -37,10 +40,8 @@ export async function runDirectorProject(options: {
     signal?: AbortSignal;
     onProgress?: (text: string) => void;
 }): Promise<DirectorProject> {
-    const channel = resolveModelChannel(options.config, options.config.videoModel || options.config.model || "");
-    const baseUrl = (channel.comfyuiProxyUrl || "").trim();
-    if (!baseUrl) throw new Error("请先在设置里填写 ComfyUI 地址。导演台会把勾选的分段交给本机 MiniMax H3 Director。");
-    const token = channel.comfyuiProxyToken;
+    const { baseUrl, token } = resolveDirectorComfyui(options.config);
+    if (!baseUrl) throw new Error("请先在设置里填写 ComfyUI 地址。导演台使用全局配置里的 ComfyUI 地址。");
     const planned = planDirectorUploads(options.project, options.linked || []);
     options.onProgress?.("正在上传素材");
 
@@ -60,15 +61,24 @@ export async function runDirectorProject(options: {
     const timeline = buildDirectorTimeline(options.project, { common, byShot });
     const seed = generateRandomSeed() % 1_000_000_000;
     const workflow = buildDirectorWorkflow(options.project, timeline, seed);
+    const startedAt = Date.now() / 1000;
     options.onProgress?.("正在提交导演台");
     const jobId = await submitJob(workflow, baseUrl, token);
     options.onProgress?.("导演台生成中");
     const assetIds = await pollJob(jobId, baseUrl, token, options.signal, Date.now() + JOB_TIMEOUT_MS, collectVideoAssetIds, (status) => options.onProgress?.(status));
     if (!assetIds) throw new Error("导演台生成已取消。");
-    if (assetIds.length === 0) throw new Error("导演台没有返回成片。请确认 ComfyUI 已安装 MiniMax H3 Director 和 Video Helper Suite。");
 
     const runShots = activeShots(options.project).filter((shot) => shot.run);
-    const videos = await Promise.all(assetIds.map((assetId) => downloadComfyuiVideo(assetId, baseUrl, token)));
+    const segmentFiles = await listDirectorSegmentExports(baseUrl, token, startedAt, options.signal);
+    const mapped = mapSegmentExportsToShots(activeShots(options.project), segmentFiles);
+    const segmentIds = runShots.flatMap((shot) => {
+        const file = mapped.find((item) => item.id === shot.id)?.file;
+        return file ? [`/view?filename=${encodeURIComponent(file.filename)}&type=output&subfolder=${encodeURIComponent(file.subfolder)}`] : [];
+    });
+    const usedSegments = segmentIds.length === runShots.length && runShots.length > 0;
+    const outputIds = usedSegments ? segmentIds : assetIds;
+    if (outputIds.length === 0) throw new Error("导演台没有返回成片。请确认 ComfyUI 已安装 MiniMax H3 Director 和 Video Helper Suite。");
+    const videos = await Promise.all(outputIds.map((assetId) => downloadComfyuiVideo(assetId, baseUrl, token)));
     const stored = await Promise.all(videos.map((video) => uploadMediaFile(video.dataUrl, "director")));
     const byId = new Map<string, { storageKey: string; url: string }>();
     runShots.forEach((shot, index) => {
@@ -79,14 +89,35 @@ export async function runDirectorProject(options: {
     const shots = options.project[key].map((shot) => applyVideo(shot, byId.get(shot.id)));
     const titled = runShots.map((shot) => shot.title).filter(Boolean).join("、");
     const missing = Math.max(0, runShots.length - stored.length);
+    const dropped = !usedSegments && missing > 0
+        ? "导演节点分段导出时只把最后一段留在工作流输出里，其余成片写在 ComfyUI 的 output/minimax_seg_export。请重启已更新的 MiniMax H3 Director 后再生成。"
+        : "";
     return {
         ...options.project,
         busy: false,
         [key]: shots,
         receipt: missing
-            ? `已回到时间轴 ${stored.length} 段。还有 ${missing} 段没有成片。`
+            ? `已回到时间轴 ${stored.length} 段。还有 ${missing} 段没有成片。${dropped}`
             : `已提交 ${titled}。成片按段回到时间轴。`,
     };
+}
+
+async function listDirectorSegmentExports(baseUrl: string, token: string | undefined, startedAt: number, signal?: AbortSignal) {
+    try {
+        const headers: Record<string, string> = {};
+        if (token) headers.Authorization = `Bearer ${token}`;
+        const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/minimax/director/latest_segment_exports?since=${encodeURIComponent(String(startedAt))}`, { headers, signal });
+        if (!response.ok) return [];
+        const body = await response.json() as { files?: Array<{ index?: unknown; filename?: unknown; subfolder?: unknown }> };
+        return (body.files || []).flatMap((file) => {
+            const filename = typeof file.filename === "string" ? file.filename : "";
+            const index = typeof file.index === "number" ? file.index : parseSegmentExportName(filename);
+            const subfolder = typeof file.subfolder === "string" ? file.subfolder : "";
+            return index === null || !filename ? [] : [{ index, filename, subfolder }];
+        });
+    } catch {
+        return [];
+    }
 }
 
 function applyVideo(shot: DirectorShot, video?: { storageKey: string; url: string }): DirectorShot {

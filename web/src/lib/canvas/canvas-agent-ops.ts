@@ -3,6 +3,7 @@ import { nanoid } from "nanoid";
 import i18n from "@/i18n";
 import { getNodeSpec, isRegisteredNodeType } from "@/lib/canvas/node-registry";
 import { validateInputConnection } from "@/lib/canvas/canvas-node-geometry";
+import { readDirectorProject, withDirectorRunSelection } from "@/lib/canvas/director-desk";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type CanvasNodeTypeId, type ViewportTransform } from "@/types/canvas";
 
 export type CanvasAgentOp =
@@ -13,7 +14,8 @@ export type CanvasAgentOp =
     | { type: "connect_nodes"; id?: string; fromNodeId: string; toNodeId: string }
     | { type: "set_viewport"; viewport: ViewportTransform }
     | { type: "select_nodes"; ids: string[] }
-    | { type: "run_generation"; nodeId: string; mode?: "text" | "image" | "video" | "audio"; prompt?: string };
+    | { type: "run_generation"; nodeId: string; mode?: "text" | "image" | "video" | "audio"; prompt?: string }
+    | { type: "run_director"; nodeId: string; shotIds?: string[] };
 
 export type CanvasAgentSnapshot = {
     projectId: string;
@@ -79,6 +81,13 @@ export function applyCanvasAgentOps(snapshot: CanvasAgentSnapshot, ops?: CanvasA
         }
         if (op.type === "set_viewport" && op.viewport) viewport = op.viewport;
         if (op.type === "select_nodes") selectedNodeIds = (op.ids || []).filter((id) => nodes.some((node) => node.id === id));
+        if (op.type === "run_director" && op.shotIds?.length) {
+            nodes = nodes.map((node) => {
+                if (node.id !== op.nodeId || node.type !== CanvasNodeType.Director) return node;
+                const director = withDirectorRunSelection(readDirectorProject(node.metadata?.director), op.shotIds);
+                return { ...node, metadata: { ...node.metadata, director } };
+            });
+        }
     });
 
     return { ...snapshot, nodes, connections, selectedNodeIds, viewport };

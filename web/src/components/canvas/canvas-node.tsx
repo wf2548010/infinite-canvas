@@ -6,6 +6,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import { emitCanvasEvent } from "@/lib/canvas/canvas-event-bus";
 import { activeShots, readDirectorProject } from "@/lib/canvas/director-desk";
+import { resolveMediaUrl } from "@/services/file-storage";
 import { getNodeDefinition } from "@/lib/canvas/node-registry";
 import { buildNodeContext } from "@/lib/canvas/plugin-node-context";
 import { useCollabStore } from "@/stores/use-collab-store";
@@ -574,21 +575,41 @@ const nodeContentRenderers = {
     [CanvasNodeType.Director]: DirectorNodeContent,
 } satisfies Record<CanvasNodeType, (props: NodeContentRendererProps) => ReactNode>;
 
+function useStoredMediaUrl(storageKey?: string, fallback?: string) {
+    const [url, setUrl] = useState("");
+    useEffect(() => {
+        let alive = true;
+        if (!storageKey) {
+            setUrl(fallback || "");
+            return () => { alive = false; };
+        }
+        void resolveMediaUrl(storageKey, fallback || "").then((next) => { if (alive) setUrl(next); });
+        return () => { alive = false; };
+    }, [fallback, storageKey]);
+    return url;
+}
+
 function DirectorNodeContent({ node, theme }: NodeContentRendererProps) {
     const { t } = useTranslation();
     const project = readDirectorProject(node.metadata?.director);
     const shots = activeShots(project);
     const seconds = shots.reduce((sum, shot) => sum + shot.seconds, 0);
+    const clip = [...shots].reverse().find((shot) => shot.videoStorageKey || shot.videoUrl);
+    const previewUrl = useStoredMediaUrl(clip?.videoStorageKey, clip?.videoUrl);
     return (
-        <div className="flex h-full w-full flex-col justify-between p-4" style={{ color: theme.node.text }}>
-            <div>
+        <div className="flex h-full w-full flex-col justify-between p-3" style={{ color: theme.node.text }}>
+            <div className="flex min-h-0 flex-1 flex-col">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                    <Clapperboard className="size-4" style={{ color: theme.node.muted }} />
+                    <Clapperboard className="size-4 shrink-0" style={{ color: theme.node.muted }} />
                     <span className="truncate">{project.title}</span>
                 </div>
-                <p className="mt-2 text-xs" style={{ color: theme.node.muted }}>
-                    {project.mode === "r2v" ? t("canvas.director.reference") : t("canvas.director.frames")} · {seconds}s · {shots.length} {t("canvas.director.segments")}
-                </p>
+                {previewUrl ? (
+                    <video src={`${previewUrl}#t=0.1`} muted playsInline preload="metadata" className="mt-2 min-h-0 w-full flex-1 bg-black object-cover" />
+                ) : (
+                    <p className="mt-2 text-xs" style={{ color: theme.node.muted }}>
+                        {project.mode === "r2v" ? t("canvas.director.reference") : t("canvas.director.frames")} · {seconds}s · {shots.length} {t("canvas.director.segments")}
+                    </p>
+                )}
             </div>
             <button
                 type="button"

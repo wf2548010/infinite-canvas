@@ -121,6 +121,17 @@ export async function hydrateCanvasImages(nodes: CanvasNodeData[]) {
     return Promise.all(
         nodes.map(async (node) => {
             const content = node.metadata?.content;
+            if (node.type === CanvasNodeType.Director && node.metadata?.director) {
+                const refreshShot = async <T extends { videoStorageKey?: string; videoUrl?: string }>(shot: T) => (
+                    shot.videoStorageKey ? { ...shot, videoUrl: await resolveMediaUrl(shot.videoStorageKey, shot.videoUrl || "") } : shot
+                );
+                const director = node.metadata.director;
+                const [r2v, fl2v] = await Promise.all([
+                    Promise.all((director.r2v || []).map(refreshShot)),
+                    Promise.all((director.fl2v || []).map(refreshShot)),
+                ]);
+                return { ...node, metadata: { ...node.metadata, director: { ...director, r2v, fl2v } } };
+            }
             if ((node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && node.metadata?.storageKey) return { ...node, metadata: { ...node.metadata, content: await resolveMediaUrl(node.metadata.storageKey, content) } };
             if (node.type !== CanvasNodeType.Image || !content) return node;
             const images = await Promise.all((node.metadata?.images || []).map(async (image) => (image.content ? { ...image, content: await resolveImageUrl(image.storageKey, image.content) } : image)));

@@ -39,3 +39,36 @@ test("canvas_generate_image still produces run_generation", () => {
     const ops = opsOf("canvas_generate_image", { prompt: "a dog", autoRun: true });
     assert.ok(ops.some((op) => op.type === "run_generation"));
 });
+
+test("canvas_director_apply creates a director node from shots", () => {
+    const ops = opsOf("canvas_director_apply", {
+        title: "雨夜",
+        mode: "r2v",
+        shots: [
+            { title: "撑伞", prompt: "走进雨里", seconds: 5 },
+            { title: "回头", prompt: "在路灯下回头", seconds: 10, continuity: true },
+        ],
+    });
+    const added = ops.find((op) => op.type === "add_node");
+    assert.equal(added?.nodeType, "director");
+    assert.equal(added?.title, "雨夜");
+    assert.equal(added?.metadata?.director?.r2v?.length, 2);
+    assert.equal(added?.metadata?.director?.r2v?.[1]?.continuity, true);
+    assert.equal(added?.metadata?.director?.r2v?.[1]?.seconds, 10);
+});
+
+test("canvas_director_apply updates the existing director node", () => {
+    const request = buildCanvasToolRequest("canvas_director_apply", { nodeId: "dir-1", commonPrompt: "保持短发" }, {
+        nodes: [{ id: "dir-1", type: "director", title: "雨夜", position: { x: 0, y: 0 }, width: 340, height: 168, metadata: { director: { title: "雨夜", mode: "r2v", r2v: [{ id: "s1", title: "撑伞", prompt: "走", seconds: 5, run: true }] } } }],
+    });
+    const ops = (request.input as { ops: Array<Record<string, any>> }).ops;
+    assert.equal(ops[0].type, "update_node");
+    assert.equal(ops[0].id, "dir-1");
+    assert.equal(ops[0].metadata.director.commonPrompt, "保持短发");
+    assert.equal(ops[0].metadata.director.r2v[0].id, "s1");
+});
+
+test("canvas_director_generate asks the page to start that director node", () => {
+    const ops = opsOf("canvas_director_generate", { nodeId: "dir-1", shotIds: ["s2"] });
+    assert.deepEqual(ops, [{ type: "run_director", nodeId: "dir-1", shotIds: ["s2"] }]);
+});

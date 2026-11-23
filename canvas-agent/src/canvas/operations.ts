@@ -67,7 +67,17 @@ export function buildCanvasToolRequest(name: ToolName, input: Record<string, unk
         const data = input as { nodeId: string; mode?: string; prompt?: string };
         return applyOps([runGenerationOp(data.nodeId, generationMode(data.mode), data.prompt)]);
     }
+    if (name === "canvas_director_apply") return applyOps(directorApplyOps(input, state));
+    if (name === "canvas_director_generate") {
+        const data = input as { nodeId?: string; shotIds?: string[] };
+        return applyOps([{ type: "run_director", nodeId: data.nodeId || directorNodeId(state), shotIds: data.shotIds }]);
+    }
     throw new Error(`未知工具：${name}`);
+}
+
+export function summarizeDirectorNodes(state: CanvasSnapshot | null, nodeId?: string) {
+    const nodes = (state?.nodes || []).filter((node) => node.type === "director" && (!nodeId || node.id === nodeId));
+    return { nodes: nodes.map((node) => ({ id: node.id, title: node.title, director: compactDirector(node.metadata?.director) })) };
 }
 
 /** 按最大边限制计算附件图片节点尺寸，并保持原始比例。 */
@@ -165,6 +175,91 @@ function generationTitle(mode: "text" | "image" | "video" | "audio") {
 /** 按节点 ID 查找当前画布节点。 */
 function findNode(state: CanvasSnapshot | null, id: string): CanvasNode | undefined {
     return (state?.nodes || []).find((node) => node.id === id);
+}
+
+function directorNodeId(state: CanvasSnapshot | null) {
+    const nodes = (state?.nodes || []).filter((node) => node.type === "director");
+    const selected = nodes.filter((node) => state?.selectedNodeIds?.includes(node.id));
+    const node = selected.length === 1 ? selected[0] : nodes.length === 1 ? nodes[0] : undefined;
+    if (!node) throw new Error("请指定导演台节点。");
+    return node.id;
+}
+
+function directorApplyOps(input: Record<string, unknown>, state: CanvasSnapshot | null) {
+    const requestedId = typeof input.nodeId === "string" ? input.nodeId : "";
+    const existing = requestedId ? findNode(state, requestedId) : undefined;
+    if (requestedId && (!existing || existing.type !== "director")) throw new Error("找不到这个导演台节点。");
+    const project = mergeDirectorProject(existing?.metadata?.director, input);
+    const title = project.title;
+    if (!existing) {
+        const id = `director-${crypto.randomUUID()}`;
+        return [{ type: "add_node", id, nodeType: "director", title, position: { x: nextCanvasX(state), y: 0 }, metadata: { status: "idle", director: project } }, { type: "select_nodes", ids: [id] }];
+    }
+    return [{ type: "update_node", id: existing.id, patch: { title }, metadata: { director: project } }];
+}
+
+function mergeDirectorProject(raw: unknown, input: Record<string, unknown>) {
+    const existing = raw && typeof raw === "object" ? raw as Record<string, any> : {};
+    const mode = input.mode === "fl2v" || input.mode === "r2v" ? input.mode : existing.mode === "fl2v" ? "fl2v" : "r2v";
+    const key = mode === "fl2v" ? "fl2v" : "r2v";
+    const previous = Array.isArray(existing[key]) ? existing[key] : [];
+    const shots = Array.isArray(input.shots)
+        ? input.shots.map((shot, index) => directorShot(shot as Record<string, unknown>, index))
+        : previous;
+    const aspect = input.aspect === "9:16" || input.aspect === "16:9" ? input.aspect : existing.aspect === "9:16" ? "9:16" : "16:9";
+    const megapixel = input.megapixel === "0.4" || input.megapixel === "0.5" || input.megapixel === "0.98" ? input.megapixel : existing.megapixel || "0.5";
+    return {
+        ...existing,
+        title: stringOr(input.title, existing.title) || "导演台",
+        mode,
+        aspect,
+        megapixel,
+        commonPrompt: typeof input.commonPrompt === "string" ? input.commonPrompt : existing.commonPrompt || "",
+        [key]: shots,
+    };
+}
+
+function directorShot(input: Record<string, unknown>, index: number) {
+    const seconds = input.seconds === 10 || input.seconds === 15 ? input.seconds : 5;
+    return {
+        id: typeof input.id === "string" && input.id ? input.id : `shot-${index + 1}`,
+        title: stringOr(input.title, "") || `分镜 ${String(index + 1).padStart(2, "0")}`,
+        prompt: typeof input.prompt === "string" ? input.prompt : "",
+        seconds,
+        run: input.run !== false,
+        status: "idle",
+        continuity: index > 0 && input.continuity === true,
+    };
+}
+
+function stringOr(value: unknown, fallback: unknown) {
+    return typeof value === "string" && value.trim() ? value.trim() : typeof fallback === "string" ? fallback : "";
+}
+
+function compactDirector(raw: unknown) {
+    if (!raw || typeof raw !== "object") return null;
+    const project = raw as Record<string, any>;
+    const shots = (value: unknown) => Array.isArray(value) ? value.map((shot) => ({
+        id: shot?.id,
+        title: shot?.title,
+        prompt: shot?.prompt,
+        seconds: shot?.seconds,
+        run: shot?.run !== false,
+        continuity: Boolean(shot?.continuity),
+        status: shot?.status === "generated" ? "generated" : "idle",
+        hasVideo: Boolean(shot?.videoStorageKey || shot?.videoUrl),
+    })) : [];
+    return {
+        title: project.title,
+        mode: project.mode,
+        aspect: project.aspect,
+        megapixel: project.megapixel,
+        commonPrompt: project.commonPrompt,
+        busy: Boolean(project.busy),
+        receipt: project.receipt || "",
+        r2v: shots(project.r2v),
+        fl2v: shots(project.fl2v),
+    };
 }
 
 /** 移除对象中未设置的生成参数。 */

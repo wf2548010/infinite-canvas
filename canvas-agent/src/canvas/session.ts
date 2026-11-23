@@ -4,7 +4,7 @@ import type { ServerResponse } from "node:http";
 import type { AgentAttachment } from "../agent/types.js";
 import { logger } from "../utils/logger.js";
 import { openCanvasInBrowser } from "../utils/browser.js";
-import { buildCanvasToolRequest, fitAttachmentNodeSize } from "./operations.js";
+import { buildCanvasToolRequest, fitAttachmentNodeSize, summarizeDirectorNodes } from "./operations.js";
 import type { ToolName } from "./schemas.js";
 import { compactCanvasState, compactNode, isToolName, nextCanvasX, parseToolInput } from "./tools.js";
 import type { CanvasSnapshot } from "./types.js";
@@ -453,6 +453,10 @@ export class CanvasSession {
         if (name === "canvas_get_selection") {
             const ids = new Set(this.canvasState?.selectedNodeIds || []);
             return { nodes: (this.canvasState?.nodes || []).filter((node) => ids.has(node.id)).map(compactNode) };
+        }
+        if (name === "canvas_director_get") {
+            if (!this.clients.size || !this.canvasState) throw new Error("当前没有已连接画布");
+            return summarizeDirectorNodes(this.canvasState, typeof input.nodeId === "string" ? input.nodeId : undefined);
         }
         if (name === "canvas_create_attachment_nodes") return await this.createAttachmentNodes(input as { attachmentIds: string[]; x?: number; y?: number; gap?: number; direction?: "row" | "column" });
         if (!this.clients.size) throw new Error("当前没有已连接画布");

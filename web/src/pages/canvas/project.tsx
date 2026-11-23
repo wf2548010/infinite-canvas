@@ -106,7 +106,8 @@ import {
     updateNodeGenerationProgress,
 } from "@/lib/canvas/canvas-generation-helpers";
 import { onCanvasEvent } from "@/lib/canvas/canvas-event-bus";
-import { readDirectorProject } from "@/lib/canvas/director-desk";
+import { directorRunClips, readDirectorProject } from "@/lib/canvas/director-desk";
+import { runDirectorProject } from "@/services/api/director-desk";
 import { getNodeDefinition, isBuiltinNodeType as isBuiltinType, useNodeRegistryVersion } from "@/lib/canvas/node-registry";
 import { registerBuiltinNodes } from "@/components/canvas/nodes/builtin-nodes";
 import { CanvasInterruptedBanner } from "@/components/canvas/canvas-interrupted-banner";
@@ -355,6 +356,7 @@ function InfiniteCanvasPage() {
     const viewportRef = useRef(viewport);
     const focusAnimRef = useRef<number | null>(null);
     const generateNodeRef = useRef<((nodeId: string, mode: CanvasNodeGenerationMode, prompt: string, intent?: CanvasGenerationIntent) => Promise<void>) | null>(null);
+    const runDirectorRef = useRef<((nodeId: string) => Promise<void>) | null>(null);
     const connectingParamsRef = useRef(connectingParams);
     const connectionTargetNodeIdRef = useRef(connectionTargetNodeId);
     const connectionRejectedNodeIdRef = useRef(connectionRejectedNodeId);
@@ -1041,6 +1043,7 @@ function InfiniteCanvasPage() {
         selectedNodeIdsRef,
         viewportRef,
         generateNodeRef,
+        runDirectorRef,
         setNodes,
         setConnections,
         setSelectedNodeIds,
@@ -4132,6 +4135,93 @@ function InfiniteCanvasPage() {
         generateNodeRef.current = handleGenerateNode;
     }, [handleGenerateNode]);
 
+    const publishDirectorOutputs = useCallback((directorId: string, project: ReturnType<typeof readDirectorProject>) => {
+        const clips = directorRunClips(project);
+        const director = nodesRef.current.find((item) => item.id === directorId);
+        if (!clips.length || !director) return;
+        const spec = NODE_DEFAULT_SIZE[CanvasNodeType.Video];
+        const withProject = nodesRef.current.map((item) => item.id === directorId ? { ...item, title: project.title || item.title, metadata: { ...item.metadata, director: project } } : item);
+        const created = clips.map((clip, index) => {
+            const id = nanoid();
+            const node: CanvasNodeData = {
+                id,
+                type: CanvasNodeType.Video,
+                title: clip.title,
+                position: { x: director.position.x + director.width + 80, y: director.position.y + index * (spec.height + 28) },
+                width: spec.width,
+                height: spec.height,
+                metadata: {
+                    content: clip.url,
+                    storageKey: clip.storageKey,
+                    status: "success",
+                    prompt: clip.prompt,
+                    mimeType: "video/mp4",
+                    naturalWidth: clip.width,
+                    naturalHeight: clip.height,
+                    generationOriginNodeId: directorId,
+                },
+            };
+            addAsset({
+                kind: "video",
+                title: clip.title,
+                coverUrl: "",
+                tags: ["导演台"],
+                source: "导演台",
+                data: { url: clip.url, storageKey: clip.storageKey, width: clip.width, height: clip.height, bytes: 0, mimeType: "video/mp4" },
+                metadata: { source: "director", nodeId: directorId, shotId: clip.id, prompt: clip.prompt },
+            });
+            return node;
+        });
+        const nextNodes = [...withProject, ...created];
+        const nextConnections = [
+            ...connectionsRef.current,
+            ...created.map((node) => ({ id: nanoid(), fromNodeId: directorId, toNodeId: node.id, kind: "lineage" as const })),
+        ];
+        nodesRef.current = nextNodes;
+        connectionsRef.current = nextConnections;
+        setNodes(nextNodes);
+        setConnections(nextConnections);
+        setSelectedNodeIds(new Set(created.map((node) => node.id)));
+        message.success(t("canvas.director.placed", { count: created.length }));
+    }, [addAsset, message, t]);
+
+    const handleRunDirector = useCallback(async (nodeId: string) => {
+        const node = nodesRef.current.find((item) => item.id === nodeId && item.type === CanvasNodeType.Director);
+        if (!node) throw new Error("找不到导演台");
+        const project = readDirectorProject(node.metadata?.director);
+        const sources = new Set(connectionsRef.current.filter((item) => item.toNodeId === nodeId).map((item) => item.fromNodeId));
+        const linked = nodesRef.current.flatMap((item) => {
+            if (!sources.has(item.id) || item.type !== CanvasNodeType.Image) return [];
+            const slots = item.metadata?.images?.filter((image) => image.content || image.storageKey) || [];
+            const images = slots.length ? slots : [{ id: item.id, content: item.metadata?.content, storageKey: item.metadata?.storageKey }];
+            return images.filter((image) => image.content || image.storageKey).map((image) => ({
+                id: image.id || item.id,
+                name: item.title,
+                storageKey: image.storageKey,
+                url: image.content,
+            }));
+        });
+        const write = (next: ReturnType<typeof readDirectorProject>) => {
+            nodesRef.current = nodesRef.current.map((item) => item.id === nodeId ? { ...item, title: next.title || item.title, metadata: { ...item.metadata, director: next } } : item);
+            setNodes(nodesRef.current);
+        };
+        setDirectorNodeId(nodeId);
+        write({ ...project, busy: true, receipt: "" });
+        try {
+            const result = await runDirectorProject({ config: effectiveConfig, project, linked });
+            write(result);
+            publishDirectorOutputs(nodeId, result);
+        } catch (error) {
+            const text = error instanceof Error ? error.message : t("canvas.director.failed");
+            const current = nodesRef.current.find((item) => item.id === nodeId);
+            write({ ...readDirectorProject(current?.metadata?.director), busy: false, receipt: text });
+            message.error(text);
+        }
+    }, [effectiveConfig, message, publishDirectorOutputs, t]);
+    useEffect(() => {
+        runDirectorRef.current = handleRunDirector;
+    }, [handleRunDirector]);
+
     const handleRetryNode = useCallback(
         async (node: CanvasNodeData, imageId?: string, intent: "retry" | "resume" = "retry") => {
             if (isViewerRef.current) {
@@ -5013,6 +5103,7 @@ function InfiniteCanvasPage() {
                         project={directorDesk.project}
                         linkedImages={directorDesk.linked}
                         onChange={(next) => setNodes((prev) => prev.map((node) => node.id === directorDesk.node.id ? { ...node, title: next.title || node.title, metadata: { ...node.metadata, director: next } } : node))}
+                        onGenerated={(next) => publishDirectorOutputs(directorDesk.node.id, next)}
                         onClose={() => setDirectorNodeId(null)}
                     />
                 ) : null}

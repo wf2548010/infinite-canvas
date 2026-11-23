@@ -31,11 +31,13 @@ export function CanvasDirectorDesk({
     project,
     linkedImages,
     onChange,
+    onGenerated,
     onClose,
 }: {
     project: DirectorProject;
     linkedImages: DirectorMedia[];
     onChange: (project: DirectorProject) => void;
+    onGenerated?: (project: DirectorProject) => void;
     onClose: () => void;
 }) {
     const { t } = useTranslation();
@@ -88,7 +90,7 @@ export function CanvasDirectorDesk({
             const current = latest.current;
             const key = started.mode === "r2v" ? "r2v" : "fl2v";
             const done = new Map(result[key].map((shot) => [shot.id, shot]));
-            onChange({
+            const next = {
                 ...current,
                 busy: false,
                 receipt: result.receipt,
@@ -96,7 +98,9 @@ export function CanvasDirectorDesk({
                     const video = done.get(shot.id);
                     return video?.videoStorageKey ? { ...shot, status: "generated" as const, videoStorageKey: video.videoStorageKey, videoUrl: video.videoUrl } : shot;
                 }),
-            });
+            };
+            onChange(next);
+            onGenerated?.(next);
         } catch (error) {
             const text = error instanceof Error ? error.message : t("canvas.director.failed");
             onChange({ ...latest.current, busy: false, receipt: text });
@@ -296,7 +300,7 @@ function Preview({ shot, compact, pixel }: { shot: DirectorShot; compact?: boole
     const still = useStillUrl(shot.start || shot.extra);
     return (
         <div className="relative" style={{ background: theme.canvas.background, height: compact ? 84 : 220 }}>
-            {videoUrl ? <video src={videoUrl} className="h-full w-full object-cover" muted playsInline /> : still ? <img src={still} alt="" className="h-full w-full object-cover" /> : (
+            {videoUrl ? <video src={`${videoUrl}#t=0.1`} className="h-full w-full bg-black object-cover" muted playsInline preload="metadata" controls={!compact} /> : still ? <img src={still} alt="" className="h-full w-full object-cover" /> : (
                 <div className="grid h-full place-items-center" style={{ color: theme.node.faint }}>
                     <Clapperboard className="size-5" />
                 </div>
@@ -325,18 +329,14 @@ function useStillUrl(media?: DirectorMedia) {
 }
 
 function useVideoUrl(shot: DirectorShot) {
-    const [url, setUrl] = useState(shot.videoUrl || "");
+    const [url, setUrl] = useState("");
     useEffect(() => {
         let alive = true;
-        if (shot.videoUrl) {
-            setUrl(shot.videoUrl);
-            return () => { alive = false; };
-        }
         if (!shot.videoStorageKey) {
-            setUrl("");
+            setUrl(shot.videoUrl || "");
             return () => { alive = false; };
         }
-        void resolveMediaUrl(shot.videoStorageKey).then((next) => { if (alive) setUrl(next); });
+        void resolveMediaUrl(shot.videoStorageKey, shot.videoUrl || "").then((next) => { if (alive) setUrl(next); });
         return () => { alive = false; };
     }, [shot.videoStorageKey, shot.videoUrl]);
     return url;

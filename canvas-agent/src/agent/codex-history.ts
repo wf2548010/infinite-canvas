@@ -728,6 +728,9 @@ function toolName(name: string) {
     if (name === "canvas_select_nodes") return "选择节点";
     if (name === "canvas_set_viewport") return "调整视口";
     if (name === "canvas_run_generation") return "触发生成";
+    if (name === "canvas_director_get") return "读取导演台";
+    if (name === "canvas_director_apply") return "更新导演台";
+    if (name === "canvas_director_generate") return "开始导演台";
     if (name === "workbench_image_get_config") return "生图配置";
     if (name === "workbench_image_generate") return "生图工作台生成";
     if (name === "workbench_video_get_config") return "视频配置";

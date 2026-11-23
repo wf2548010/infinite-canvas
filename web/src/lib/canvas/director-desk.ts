@@ -139,6 +139,58 @@ export function activeShots(project: DirectorProject) {
     return project.mode === "r2v" ? project.r2v : project.fl2v;
 }
 
+export type DirectorRunClip = {
+    id: string;
+    title: string;
+    prompt: string;
+    url: string;
+    storageKey: string;
+    width: number;
+    height: number;
+};
+
+/** 只取出这次勾选并已经写回成片的分段，供画布预览和资产使用。 */
+export function directorRunClips(project: DirectorProject): DirectorRunClip[] {
+    const size = directorSize(project);
+    return activeShots(project).flatMap((shot) => {
+        if (!shot.run || !shot.videoStorageKey || !shot.videoUrl) return [];
+        return [{
+            id: shot.id,
+            title: shot.title || shot.id,
+            prompt: shot.prompt,
+            url: shot.videoUrl,
+            storageKey: shot.videoStorageKey,
+            width: size.width,
+            height: size.height,
+        }];
+    });
+}
+
+const SEGMENT_EXPORT_NAME = /^seg_(\d{4})\.mp4$/i;
+
+export function parseSegmentExportName(filename: string) {
+    const match = SEGMENT_EXPORT_NAME.exec(filename);
+    return match ? Number(match[1]) : null;
+}
+
+export function mapSegmentExportsToShots(shots: DirectorShot[], files: Array<{ index: number; filename: string; subfolder: string }>) {
+    const byIndex = new Map<number, { filename: string; subfolder: string }>();
+    for (const file of files) {
+        if (!byIndex.has(file.index)) byIndex.set(file.index, { filename: file.filename, subfolder: file.subfolder });
+    }
+    return shots.map((shot, index) => ({ id: shot.id, run: shot.run, file: shot.run ? byIndex.get(index) : undefined }));
+}
+
+export function withDirectorRunSelection(project: DirectorProject, shotIds?: string[]) {
+    if (!shotIds?.length) return project;
+    const key = project.mode === "r2v" ? "r2v" : "fl2v";
+    const known = new Set(project[key].map((shot) => shot.id));
+    const missing = shotIds.find((id) => !known.has(id));
+    if (missing) throw new Error(`找不到分段 ${missing}`);
+    const selected = new Set(shotIds);
+    return { ...project, receipt: "", [key]: project[key].map((shot) => ({ ...shot, run: selected.has(shot.id) })) };
+}
+
 export function selectedShot(project: DirectorProject) {
     const shots = activeShots(project);
     const id = project.mode === "r2v" ? project.selectedR2v : project.selectedFl2v;
@@ -157,6 +209,29 @@ export function shotRanges(shots: DirectorShot[]) {
 export function formatTimecode(seconds: number) {
     const whole = Math.max(0, Math.round(seconds));
     return `00:${String(whole).padStart(2, "0")}`;
+}
+
+export type DirectorComfyConfig = {
+    channelId?: string;
+    channels?: Array<{
+        id: string;
+        comfyuiProxyUrl?: string;
+        comfyuiProxyToken?: string;
+        baseUrl?: string;
+        apiKey?: string;
+    }>;
+};
+
+/** 导演台只连全局配置里当前生效的渠道，不跟视频模型所在渠道走。 */
+export function resolveDirectorComfyui(config: DirectorComfyConfig) {
+    const channels = config.channels || [];
+    const selected = config.channelId ? channels.find((item) => item.id === config.channelId) : undefined;
+    const channel = selected || channels[0];
+    const token = (channel?.comfyuiProxyToken || channel?.apiKey || "").trim();
+    return {
+        baseUrl: (channel?.comfyuiProxyUrl || channel?.baseUrl || "").trim(),
+        token: token || undefined,
+    };
 }
 
 export function mediaReady(media?: DirectorMedia) {
